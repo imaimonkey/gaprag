@@ -62,6 +62,13 @@ Primary script: `scripts/run_experiments.sh`
 sbatch scripts/run_experiments.sh
 ```
 
+Current header is aligned to your existing environment:
+- `#SBATCH --nodelist=server2`
+- spool-safe repo root resolution via `SLURM_SUBMIT_DIR`
+- preflight package checks (`torch/transformers/datasets/sentence-transformers/faiss`)
+
+If your cluster changes, edit only these header lines in `scripts/run_experiments.sh`.
+
 ### 3.1 Runtime toggles
 
 - `CONFIG_PATH` (default: `configs/base.yaml`)
