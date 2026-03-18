@@ -1,0 +1,18 @@
+experiments:
+  - name: no_memory
+    overrides:
+      pipeline.mode: gap_current
+      memory.type: none
+
+  - name: ema_memory
+    overrides:
+      pipeline.mode: gap_memory_ema
+      memory.type: ema
+      memory.ema_decay: 0.9
+
+  - name: keyed_memory
+    overrides:
+      pipeline.mode: gap_memory_keyed
+      memory.type: keyed
+      memory.max_items: 256
+      memory.temperature: 0.15

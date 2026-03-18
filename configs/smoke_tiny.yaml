@@ -1,0 +1,52 @@
+experiment:
+  seed: 42
+  output_dir: outputs/runs
+
+pipeline:
+  mode: gap_current
+
+corpus:
+  path: data/processed/demo_corpus.jsonl
+
+dataset:
+  path: data/processed/demo_qa.jsonl
+  limit: 2
+
+retriever:
+  encoder_name: sentence-transformers/all-MiniLM-L6-v2
+  device: null
+  normalize_embeddings: true
+  batch_size: 16
+  top_k: 3
+  index_path: data/indices/smoke_demo.faiss
+  metadata_path: data/indices/smoke_demo_metadata.jsonl
+  embedding_path: data/indices/smoke_demo_embeddings.npy
+
+generator:
+  model_name: sshleifer/tiny-gpt2
+  device: null
+  torch_dtype: auto
+  max_new_tokens: 24
+  do_sample: false
+
+doc_encoder:
+  method: score_weighted_mean
+
+gap:
+  type: diff
+  hidden_layer: -1
+  hidden_pooling: last_token
+
+memory:
+  type: none
+
+injection:
+  mode: residual_hidden
+  alpha: 0.1
+
+prompt:
+  vanilla_template: "Question: {question}\nAnswer:"
+  context_prefix: "Context:\n"
+  context_sep: "\n\n"
+  rag_template: "{context}\n\nQuestion: {question}\nAnswer:"
+  injection_target: last_token

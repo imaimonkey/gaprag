@@ -2,10 +2,15 @@ __pycache__/
 *.pyc
 .venv/
 .env
+gaprag.egg-info/
+.pytest_cache/
+.ruff_cache/
 logs/
 outputs/runs/
 outputs/tables/
 outputs/figures/
+data/indices/*
+!data/indices/.gitkeep
 *.faiss
 *.npy
 *.npz

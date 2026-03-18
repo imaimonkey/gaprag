@@ -1,0 +1,6 @@
+{"id": "q1", "question": "What is the capital of France?", "answers": ["Paris"], "context": ["doc_paris"], "metadata": {"domain": "geography"}, "session_id": "geo"}
+{"id": "q2", "question": "Which planet is the largest in the Solar System?", "answers": ["Jupiter"], "context": ["doc_jupiter"], "metadata": {"domain": "astronomy"}, "session_id": "astro"}
+{"id": "q3", "question": "What is the chemical formula of water?", "answers": ["H2O"], "context": ["doc_h2o"], "metadata": {"domain": "chemistry"}, "session_id": "sci"}
+{"id": "q4", "question": "What does the Earth revolve around?", "answers": ["the Sun", "Sun"], "context": ["doc_earth_sun"], "metadata": {"domain": "astronomy"}, "session_id": "astro"}
+{"id": "q5", "question": "Which process turns liquid water into vapor?", "answers": ["evaporation"], "context": ["doc_evap"], "metadata": {"domain": "science"}, "session_id": "sci"}
+{"id": "q6", "question": "What is the capital of Japan?", "answers": ["Tokyo"], "context": ["doc_tokyo"], "metadata": {"domain": "geography"}, "session_id": "geo"}

@@ -1,0 +1,18 @@
+experiments:
+  - name: gap_diff
+    overrides:
+      pipeline.mode: gap_memory_ema
+      gap.type: diff
+      doc_encoder.method: score_weighted_mean
+
+  - name: gap_proj_diff
+    overrides:
+      pipeline.mode: gap_memory_ema
+      gap.type: proj_diff
+      doc_encoder.method: score_weighted_mean
+
+  - name: gap_conf_weighted
+    overrides:
+      pipeline.mode: gap_memory_ema
+      gap.type: confidence_weighted
+      gap.confidence_weight_source: retrieval

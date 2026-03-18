@@ -1,0 +1,19 @@
+experiments:
+  - name: no_injection
+    overrides:
+      pipeline.mode: gap_memory_ema
+      injection.mode: none
+      injection.alpha: 0.0
+
+  - name: residual_injection
+    overrides:
+      pipeline.mode: gap_memory_ema
+      injection.mode: residual_hidden
+      injection.alpha: 0.35
+
+  - name: prefix_bias_injection
+    overrides:
+      pipeline.mode: gap_memory_ema
+      injection.mode: prefix_bias
+      injection.alpha: 0.2
+      injection.prefix_length: 1

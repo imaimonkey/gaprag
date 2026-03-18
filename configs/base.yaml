@@ -1,0 +1,68 @@
+experiment:
+  seed: 42
+  output_dir: outputs/runs
+
+pipeline:
+  mode: gap_memory_ema
+
+corpus:
+  path: data/processed/demo_corpus.jsonl
+
+dataset:
+  path: data/processed/demo_qa.jsonl
+  limit: 0
+  field_map:
+    id: id
+    question: question
+    answers: answers
+    context: context
+    metadata: metadata
+    session_id: session_id
+
+retriever:
+  encoder_name: sentence-transformers/all-MiniLM-L6-v2
+  device: null
+  normalize_embeddings: true
+  batch_size: 64
+  top_k: 5
+  index_path: data/indices/demo.faiss
+  metadata_path: data/indices/demo_metadata.jsonl
+  embedding_path: data/indices/demo_embeddings.npy
+
+generator:
+  model_name: Qwen/Qwen2.5-1.5B-Instruct
+  device: null
+  torch_dtype: auto
+  max_new_tokens: 96
+  do_sample: false
+  temperature: 0.0
+  top_p: 1.0
+
+doc_encoder:
+  method: score_weighted_mean
+
+gap:
+  type: diff
+  target_dim: null
+  confidence_weight_source: retrieval
+  hidden_layer: -1
+  hidden_pooling: last_token
+
+memory:
+  type: ema
+  ema_decay: 0.9
+  max_items: 256
+  temperature: 0.1
+
+injection:
+  mode: residual_hidden
+  alpha: 0.3
+  prefix_length: 1
+
+prompt:
+  vanilla_template: "Question: {question}\nAnswer:"
+  context_prefix: "Context:\n"
+  context_sep: "\n\n"
+  rag_template: "{context}\n\nQuestion: {question}\nAnswer:"
+  injection_target: last_token
+  prefix_length: 1
