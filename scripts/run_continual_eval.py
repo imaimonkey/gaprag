@@ -16,7 +16,14 @@ if str(ROOT) not in sys.path:
 
 from gaprag.datasets import load_qa_dataset
 from gaprag.logging_utils import create_run_dir, setup_logger, snapshot_config
-from gaprag.metrics import exact_match, hallucination_proxy, retrieval_hit_at_k, summarize_scores, token_f1
+from gaprag.metrics import (
+    exact_match,
+    extract_final_answer,
+    hallucination_proxy,
+    retrieval_hit_at_k,
+    summarize_scores,
+    token_f1,
+)
 from gaprag.pipeline import GapRAGPipeline
 from gaprag.utils import load_yaml, save_json, save_jsonl, set_seed
 
@@ -26,6 +33,8 @@ def run_setting(
     dataset: list[dict],
     mode: str,
     setting: str,
+    answer_parse_strategy: str = "heuristic",
+    answer_max_chars: int = 80,
 ) -> tuple[list[dict], dict]:
     pipeline.reset_session(None)
 
@@ -39,14 +48,21 @@ def run_setting(
             session_id = str(item.get("session_id", "default"))
 
         out = pipeline.run_query(question=item["question"], mode=mode, session_id=session_id)
+        parsed_prediction = extract_final_answer(
+            out.prediction,
+            strategy=answer_parse_strategy,
+            max_chars=answer_max_chars,
+        )
 
         retrieved_ids = [d["doc_id"] for d in out.retrieved_docs]
         retrieved_texts = [d["text"] for d in out.retrieved_docs]
 
-        em = exact_match(out.prediction, item.get("answers", []))
-        f1 = token_f1(out.prediction, item.get("answers", []))
+        em = exact_match(parsed_prediction, item.get("answers", []))
+        f1 = token_f1(parsed_prediction, item.get("answers", []))
         hit = retrieval_hit_at_k(retrieved_ids, item.get("context", []))
-        hall = hallucination_proxy(out.prediction, retrieved_texts)
+        hall = hallucination_proxy(parsed_prediction, retrieved_texts)
+        em_raw = exact_match(out.prediction, item.get("answers", []))
+        f1_raw = token_f1(out.prediction, item.get("answers", []))
 
         correct_so_far += em
         cumulative_em = correct_so_far / step_idx
@@ -59,9 +75,12 @@ def run_setting(
             "session_id": session_id,
             "question": item.get("question", ""),
             "answers": item.get("answers", []),
-            "prediction": out.prediction,
+            "prediction_raw": out.prediction,
+            "prediction": parsed_prediction,
             "exact_match": em,
             "f1": f1,
+            "exact_match_raw": em_raw,
+            "f1_raw": f1_raw,
             "retrieval_hit_at_k": hit,
             "hallucination_proxy": hall,
             "gap_norm": out.gap_norm,
@@ -90,6 +109,9 @@ def main() -> None:
     cfg = load_yaml(args.config)
     seed = int(cfg.get("experiment", {}).get("seed", 42))
     set_seed(seed)
+    eval_cfg = cfg.get("evaluation", {})
+    answer_parse_strategy = str(eval_cfg.get("answer_parse_strategy", "heuristic"))
+    answer_max_chars = int(eval_cfg.get("answer_max_chars", 80))
 
     mode = args.mode or cfg.get("pipeline", {}).get("mode", "gap_memory_ema")
     run_name = args.run_name or f"continual_{mode}"
@@ -102,8 +124,22 @@ def main() -> None:
     logger.info("loaded dataset size=%d", len(dataset))
     pipeline = GapRAGPipeline.from_config(cfg)
 
-    rows_stateless, summary_stateless = run_setting(pipeline, dataset, mode, setting="stateless")
-    rows_continual, summary_continual = run_setting(pipeline, dataset, mode, setting="continual")
+    rows_stateless, summary_stateless = run_setting(
+        pipeline,
+        dataset,
+        mode,
+        setting="stateless",
+        answer_parse_strategy=answer_parse_strategy,
+        answer_max_chars=answer_max_chars,
+    )
+    rows_continual, summary_continual = run_setting(
+        pipeline,
+        dataset,
+        mode,
+        setting="continual",
+        answer_parse_strategy=answer_parse_strategy,
+        answer_max_chars=answer_max_chars,
+    )
 
     save_jsonl(rows_stateless, run_dir / "predictions_stateless.jsonl")
     save_jsonl(rows_continual, run_dir / "predictions_continual.jsonl")

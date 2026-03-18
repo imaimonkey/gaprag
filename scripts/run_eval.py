@@ -16,7 +16,14 @@ if str(ROOT) not in sys.path:
 
 from gaprag.datasets import load_qa_dataset
 from gaprag.logging_utils import create_run_dir, setup_logger, snapshot_config
-from gaprag.metrics import exact_match, hallucination_proxy, retrieval_hit_at_k, summarize_scores, token_f1
+from gaprag.metrics import (
+    exact_match,
+    extract_final_answer,
+    hallucination_proxy,
+    retrieval_hit_at_k,
+    summarize_scores,
+    token_f1,
+)
 from gaprag.pipeline import GapRAGPipeline
 from gaprag.utils import load_yaml, save_json, save_jsonl, set_seed
 
@@ -32,6 +39,8 @@ def main() -> None:
     cfg = load_yaml(args.config)
     seed = int(cfg.get("experiment", {}).get("seed", 42))
     set_seed(seed)
+    eval_cfg = cfg.get("evaluation", {})
+    answer_parse_strategy = str(eval_cfg.get("answer_parse_strategy", "heuristic"))
 
     mode = args.mode or cfg.get("pipeline", {}).get("mode", "gap_memory_ema")
     run_name = args.run_name or f"eval_{mode}"
@@ -57,6 +66,11 @@ def main() -> None:
 
         out = pipeline.run_query(question=question, mode=mode, session_id=session_id)
         out_dict = asdict(out)
+        parsed_prediction = extract_final_answer(
+            out.prediction,
+            strategy=answer_parse_strategy,
+            max_chars=int(eval_cfg.get("answer_max_chars", 80)),
+        )
 
         retrieved_ids = [d["doc_id"] for d in out.retrieved_docs]
         retrieved_texts = [d["text"] for d in out.retrieved_docs]
@@ -66,12 +80,15 @@ def main() -> None:
             "session_id": session_id,
             "question": question,
             "answers": answers,
-            "prediction": out.prediction,
+            "prediction_raw": out.prediction,
+            "prediction": parsed_prediction,
             "mode": mode,
-            "exact_match": exact_match(out.prediction, answers),
-            "f1": token_f1(out.prediction, answers),
+            "exact_match_raw": exact_match(out.prediction, answers),
+            "f1_raw": token_f1(out.prediction, answers),
+            "exact_match": exact_match(parsed_prediction, answers),
+            "f1": token_f1(parsed_prediction, answers),
             "retrieval_hit_at_k": retrieval_hit_at_k(retrieved_ids, item.get("context", [])),
-            "hallucination_proxy": hallucination_proxy(out.prediction, retrieved_texts),
+            "hallucination_proxy": hallucination_proxy(parsed_prediction, retrieved_texts),
             "gap_norm": out.gap_norm,
             "memory_norm": out.memory_norm,
             "prediction_confidence": out.prediction_confidence,

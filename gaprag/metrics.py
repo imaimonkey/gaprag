@@ -8,6 +8,85 @@ from typing import Iterable
 from .utils import safe_div
 
 
+_ANSWER_CUE_PATTERNS = [
+    r"(?i)final answer\s*[:：]?\s*(.+)",
+    r"(?i)answer is\s*[:：]?\s*(.+)",
+    r"(?i)^answer\s*[:：]\s*(.+)",
+    r"答案是\s*[:：]?\s*(.+)",
+    r"答案为\s*[:：]?\s*(.+)",
+    r"정답은\s*[:：]?\s*(.+)",
+    r"답은\s*[:：]?\s*(.+)",
+]
+
+
+def _clean_candidate(text: str) -> str:
+    value = str(text).strip()
+    value = value.replace("\u200b", "").replace("\ufeff", "")
+    value = re.split(r"(?i)\b(?:human|assistant|system)\s*:", value)[0]
+    value = re.split(r"(?i)\byou are\b", value)[0]
+    value = value.splitlines()[0] if value.splitlines() else value
+    value = re.sub(r"^[\-\*\d\.\)\]\s]+", "", value)
+    value = re.sub(r"^[:：\s]+", "", value)
+    value = re.split(r"\s{2,}", value)[0]
+    value = re.split(r"[。.!?;:：]\s*", value)[0]
+
+    # Option format: "A. Tokyo" -> "Tokyo"
+    option_match = re.match(r"^[A-Da-d]\s*[\.\)]\s*(.+)$", value)
+    if option_match:
+        value = option_match.group(1)
+
+    # Common QA sentence patterns -> compact short answer
+    patterns = [
+        r"(?i)\bcapital of [a-z\s]+ is ([a-z][a-z0-9\-\s]+)$",
+        r"(?i)\bchemical formula of [a-z\s]+ is ([a-z0-9\-\s]+)$",
+        r"(?i)\brevolves around (?:the )?([a-z][a-z0-9\-\s]+)$",
+        r"(?i)\bprocess .* is ([a-z][a-z0-9\-\s]+)$",
+    ]
+    for p in patterns:
+        m = re.search(p, value.strip())
+        if m:
+            value = m.group(1)
+            break
+
+    value = value.strip(" \t\r\n'\"`")
+    value = value.rstrip("。.!?;:：")
+    return value.strip()
+
+
+def extract_final_answer(prediction: str, strategy: str = "heuristic", max_chars: int = 80) -> str:
+    text = str(prediction or "").strip()
+    if not text:
+        return ""
+    if strategy == "none":
+        return text
+
+    # Case: output starts with ": Answer.Human: ..."
+    leading_match = re.search(r"^\s*[:：]\s*([^\n]+)", text)
+    if leading_match:
+        lead = _clean_candidate(leading_match.group(1))
+        if lead:
+            return lead[:max_chars]
+
+    if strategy in {"heuristic", "cue_first"}:
+        for pattern in _ANSWER_CUE_PATTERNS:
+            match = re.search(pattern, text, flags=re.MULTILINE)
+            if match:
+                candidate = match.group(1).strip().splitlines()[0]
+                return _clean_candidate(candidate)[:max_chars]
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return ""
+
+    # Prefer short declarative lines near the end.
+    for ln in reversed(lines):
+        cleaned = _clean_candidate(ln)
+        if cleaned and len(cleaned) <= max_chars:
+            return cleaned
+
+    return _clean_candidate(lines[-1])[:max_chars]
+
+
 def normalize_answer(text: str) -> str:
     text = text.lower().strip()
     text = re.sub(r"\b(a|an|the)\b", " ", text)

@@ -74,7 +74,7 @@ If your cluster changes, edit only these header lines in `scripts/run_experiment
 - `CONFIG_PATH` (default: `configs/base.yaml`)
 - `MODE` (default: `gap_memory_ema`)
 - `RUN_NAME` (optional)
-- `RUN_BUILD_INDEX` (`true/false`)
+- `RUN_BUILD_INDEX` (`auto/true/false`, default: `auto`)
 - `RUN_EVAL_STATELESS` (`true/false`)
 - `RUN_EVAL_CONTINUAL` (`true/false`)
 - `RUN_ABLATION` (`true/false`)
@@ -86,7 +86,7 @@ If your cluster changes, edit only these header lines in `scripts/run_experiment
 CONFIG_PATH=configs/gaprag_memory.yaml \
 MODE=gap_memory_ema \
 RUN_NAME=exp_gap_memory \
-RUN_BUILD_INDEX=true \
+RUN_BUILD_INDEX=auto \
 RUN_EVAL_STATELESS=true \
 RUN_EVAL_CONTINUAL=true \
 RUN_ABLATION=false \

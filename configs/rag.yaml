@@ -29,7 +29,11 @@ generator:
   do_sample: false
 
 prompt:
-  vanilla_template: "Question: {question}\nAnswer:"
+  vanilla_template: "Question: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
   context_prefix: "Context:\n"
   context_sep: "\n\n"
-  rag_template: "{context}\n\nQuestion: {question}\nAnswer:"
+  rag_template: "{context}\n\nQuestion: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
+
+evaluation:
+  answer_parse_strategy: heuristic
+  answer_max_chars: 80
