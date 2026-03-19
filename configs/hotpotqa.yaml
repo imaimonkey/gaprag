@@ -6,10 +6,10 @@ pipeline:
   mode: gap_memory_ema
 
 corpus:
-  path: data/processed/demo_corpus.jsonl
+  path: data/processed/hotpotqa_corpus.jsonl
 
 dataset:
-  path: data/processed/demo_qa.jsonl
+  path: data/processed/hotpotqa_qa.jsonl
   limit: 0
   field_map:
     id: id
@@ -25,15 +25,15 @@ retriever:
   normalize_embeddings: true
   batch_size: 64
   top_k: 5
-  index_path: data/indices/demo.faiss
-  metadata_path: data/indices/demo_metadata.jsonl
-  embedding_path: data/indices/demo_embeddings.npy
+  index_path: data/indices/hotpotqa.faiss
+  metadata_path: data/indices/hotpotqa_metadata.jsonl
+  embedding_path: data/indices/hotpotqa_embeddings.npy
 
 generator:
   model_name: Qwen/Qwen2.5-1.5B-Instruct
   device: null
   torch_dtype: auto
-  max_new_tokens: 96
+  max_new_tokens: 48
   do_sample: false
   temperature: 0.0
   top_p: 1.0

@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 from gaprag.datasets import load_qa_dataset
 from gaprag.logging_utils import create_run_dir, setup_logger, snapshot_config
 from gaprag.metrics import (
+    canonicalize_prediction,
     exact_match,
     extract_final_answer,
     hallucination_proxy,
@@ -71,6 +72,7 @@ def main() -> None:
             strategy=answer_parse_strategy,
             max_chars=int(eval_cfg.get("answer_max_chars", 80)),
         )
+        parsed_prediction = canonicalize_prediction(parsed_prediction, answers)
 
         retrieved_ids = [d["doc_id"] for d in out.retrieved_docs]
         retrieved_texts = [d["text"] for d in out.retrieved_docs]

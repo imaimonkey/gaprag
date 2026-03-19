@@ -6,10 +6,10 @@ pipeline:
   mode: gap_memory_ema
 
 corpus:
-  path: data/processed/demo_corpus.jsonl
+  path: data/processed/continual_qa_corpus.jsonl
 
 dataset:
-  path: data/processed/demo_qa.jsonl
+  path: data/processed/continual_qa_qa.jsonl
   limit: 0
   field_map:
     id: id
@@ -25,15 +25,15 @@ retriever:
   normalize_embeddings: true
   batch_size: 64
   top_k: 5
-  index_path: data/indices/demo.faiss
-  metadata_path: data/indices/demo_metadata.jsonl
-  embedding_path: data/indices/demo_embeddings.npy
+  index_path: data/indices/continual_qa.faiss
+  metadata_path: data/indices/continual_qa_metadata.jsonl
+  embedding_path: data/indices/continual_qa_embeddings.npy
 
 generator:
   model_name: Qwen/Qwen2.5-1.5B-Instruct
   device: null
   torch_dtype: auto
-  max_new_tokens: 96
+  max_new_tokens: 40
   do_sample: false
   temperature: 0.0
   top_p: 1.0
@@ -57,7 +57,7 @@ gap:
 memory:
   type: ema
   ema_decay: 0.9
-  max_items: 256
+  max_items: 512
   temperature: 0.1
   read_mode: blend_current
   current_gap_weight: 0.75
@@ -70,10 +70,10 @@ injection:
   prefix_length: 1
 
 prompt:
-  vanilla_template: "Question: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
+  vanilla_template: "Question: {question}\nRespond with only the final short answer or label in English. No explanation.\nAnswer:"
   context_prefix: "Context:\n"
   context_sep: "\n\n"
-  rag_template: "{context}\n\nQuestion: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
+  rag_template: "{context}\n\nQuestion: {question}\nRespond with only the final short answer or label in English. No explanation.\nAnswer:"
   injection_target: last_token
   prefix_length: 1
 

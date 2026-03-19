@@ -11,6 +11,10 @@ outputs/tables/
 outputs/figures/
 data/indices/*
 !data/indices/.gitkeep
+data/processed/*.jsonl
+!data/processed/demo_corpus.jsonl
+!data/processed/demo_qa.jsonl
+data/processed/benchmark_summary.json
 *.faiss
 *.npy
 *.npz

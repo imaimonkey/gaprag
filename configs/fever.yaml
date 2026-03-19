@@ -6,10 +6,10 @@ pipeline:
   mode: gap_memory_ema
 
 corpus:
-  path: data/processed/demo_corpus.jsonl
+  path: data/processed/fever_corpus.jsonl
 
 dataset:
-  path: data/processed/demo_qa.jsonl
+  path: data/processed/fever_qa.jsonl
   limit: 0
   field_map:
     id: id
@@ -25,20 +25,20 @@ retriever:
   normalize_embeddings: true
   batch_size: 64
   top_k: 5
-  index_path: data/indices/demo.faiss
-  metadata_path: data/indices/demo_metadata.jsonl
-  embedding_path: data/indices/demo_embeddings.npy
+  index_path: data/indices/fever.faiss
+  metadata_path: data/indices/fever_metadata.jsonl
+  embedding_path: data/indices/fever_embeddings.npy
 
 generator:
   model_name: Qwen/Qwen2.5-1.5B-Instruct
   device: null
   torch_dtype: auto
-  max_new_tokens: 96
+  max_new_tokens: 12
   do_sample: false
   temperature: 0.0
   top_p: 1.0
   use_chat_template: true
-  system_prompt: "You are a concise question answering assistant. Answer in English only and do not repeat the prompt."
+  system_prompt: "You are a concise fact verification assistant. Reply with only one label in English."
 
 doc_encoder:
   method: score_weighted_mean
@@ -66,17 +66,17 @@ memory:
 
 injection:
   mode: residual_hidden
-  alpha: 0.08
+  alpha: 0.05
   prefix_length: 1
 
 prompt:
-  vanilla_template: "Question: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
-  context_prefix: "Context:\n"
+  vanilla_template: "Claim: {question}\nClassify as SUPPORTS, REFUTES, or NOT ENOUGH INFO.\nRespond with one label only.\nAnswer:"
+  context_prefix: "Evidence:\n"
   context_sep: "\n\n"
-  rag_template: "{context}\n\nQuestion: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
+  rag_template: "{context}\n\nClaim: {question}\nClassify as SUPPORTS, REFUTES, or NOT ENOUGH INFO.\nRespond with one label only.\nAnswer:"
   injection_target: last_token
   prefix_length: 1
 
 evaluation:
   answer_parse_strategy: heuristic
-  answer_max_chars: 80
+  answer_max_chars: 40

@@ -71,10 +71,16 @@ If your cluster changes, edit only these header lines in `scripts/run_experiment
 
 ### 3.1 Runtime toggles
 
-- `CONFIG_PATH` (default: `configs/base.yaml`)
+- `BENCHMARK_PROFILE` (default: `demo`)
+  - `demo`, `nq`, `hotpotqa`, `fever`, `continual_qa`
+- `CONFIG_PATH` (optional; if empty, selected automatically from `BENCHMARK_PROFILE`)
 - `MODE` (default: `gap_memory_ema`)
 - `RUN_NAME` (optional)
-- `RUN_BUILD_INDEX` (`auto/true/false`, default: `auto`)
+- `PREP_BENCHMARK_DATA` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
+- `PREP_BENCHMARK` (default: same as `BENCHMARK_PROFILE`)
+- `NQ_PREP_LIMIT`, `HOTPOTQA_PREP_LIMIT`, `FEVER_PREP_LIMIT` (default: `500`)
+- `NQ_PREP_SPLIT`, `HOTPOTQA_PREP_SPLIT`, `FEVER_PREP_SPLIT` (default: `validation`)
+- `RUN_BUILD_INDEX` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
 - `RUN_EVAL_STATELESS` (`true/false`)
 - `RUN_EVAL_CONTINUAL` (`true/false`)
 - `RUN_ABLATION` (`true/false`)
@@ -83,14 +89,34 @@ If your cluster changes, edit only these header lines in `scripts/run_experiment
 ### 3.2 Example
 
 ```bash
-CONFIG_PATH=configs/gaprag_memory.yaml \
+BENCHMARK_PROFILE=continual_qa \
 MODE=gap_memory_ema \
 RUN_NAME=exp_gap_memory \
+PREP_BENCHMARK_DATA=auto \
+NQ_PREP_LIMIT=800 \
+HOTPOTQA_PREP_LIMIT=800 \
+FEVER_PREP_LIMIT=800 \
 RUN_BUILD_INDEX=auto \
 RUN_EVAL_STATELESS=true \
 RUN_EVAL_CONTINUAL=true \
 RUN_ABLATION=false \
 sbatch scripts/run_experiments.sh
+```
+
+### 3.3 Benchmark profiles (recommended)
+
+```bash
+# 1) NQ
+BENCHMARK_PROFILE=nq PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
+
+# 2) HotpotQA
+BENCHMARK_PROFILE=hotpotqa PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
+
+# 3) FEVER
+BENCHMARK_PROFILE=fever PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
+
+# 4) Continual QA (NQ + HotpotQA + FEVER interleaved)
+BENCHMARK_PROFILE=continual_qa PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
 ```
 
 ## 4. Recommended Experiment Menu

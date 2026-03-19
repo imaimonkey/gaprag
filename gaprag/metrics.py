@@ -7,25 +7,29 @@ from typing import Iterable
 
 from .utils import safe_div
 
+_FEVER_LABELS = {"SUPPORTS", "REFUTES", "NOT ENOUGH INFO"}
 
 _ANSWER_CUE_PATTERNS = [
     r"(?i)final answer\s*[:：]?\s*(.+)",
     r"(?i)answer is\s*[:：]?\s*(.+)",
     r"(?i)^answer\s*[:：]\s*(.+)",
+    r"(?i)^label\s*[:：]\s*(.+)",
     r"答案是\s*[:：]?\s*(.+)",
+    r"答案\s*[:：]?\s*(.+)",
     r"答案为\s*[:：]?\s*(.+)",
     r"정답은\s*[:：]?\s*(.+)",
     r"답은\s*[:：]?\s*(.+)",
 ]
 
-
 def _clean_candidate(text: str) -> str:
     value = str(text).strip()
     value = value.replace("\u200b", "").replace("\ufeff", "")
-    value = re.split(r"(?i)\b(?:human|assistant|system)\s*:", value)[0]
+    value = re.split(r"(?i)(?:human|assistant|system)\s*:", value)[0]
     value = re.split(r"(?i)\byou are\b", value)[0]
+    value = re.split(r"\s*\|\s*", value)[0]
     value = value.splitlines()[0] if value.splitlines() else value
-    value = re.sub(r"^[\-\*\d\.\)\]\s]+", "", value)
+    # Remove list markers without deleting legitimate leading numerals in answers.
+    value = re.sub(r"^(?:[-*]\s+|\d+[\.\)]\s+|\[\d+\]\s+)", "", value)
     value = re.sub(r"^[:：\s]+", "", value)
     value = re.split(r"\s{2,}", value)[0]
     value = re.split(r"[。.!?;:：]\s*", value)[0]
@@ -53,12 +57,65 @@ def _clean_candidate(text: str) -> str:
     return value.strip()
 
 
+def _extract_classification_label(text: str) -> str | None:
+    raw = str(text or "")
+    if not raw.strip():
+        return None
+    normalized = raw.upper()
+    if "NOT ENOUGH INFO" in normalized:
+        return "NOT ENOUGH INFO"
+    if "REFUTES" in normalized:
+        return "REFUTES"
+    if "SUPPORTS" in normalized:
+        return "SUPPORTS"
+    return None
+
+
+def _extract_binary_label(text: str) -> str | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    if re.search(r"(?i)\byes\b", raw):
+        return "yes"
+    if re.search(r"(?i)\bno\b", raw):
+        return "no"
+    return None
+
+
+def canonicalize_prediction(prediction: str, answers: Iterable[str]) -> str:
+    value = str(prediction or "").strip()
+    answer_set = {str(answer).strip().upper() for answer in answers if str(answer).strip()}
+    if answer_set and answer_set.issubset(_FEVER_LABELS):
+        normalized = value.strip().lower()
+        if normalized in {"supports", "support", "yes", "true"}:
+            return "SUPPORTS"
+        if normalized in {"refutes", "refute", "no", "false"}:
+            return "REFUTES"
+        if normalized in {
+            "not enough info",
+            "nei",
+            "unknown",
+            "insufficient information",
+            "not applicable",
+        }:
+            return "NOT ENOUGH INFO"
+    return value
+
+
 def extract_final_answer(prediction: str, strategy: str = "heuristic", max_chars: int = 80) -> str:
     text = str(prediction or "").strip()
     if not text:
         return ""
     if strategy == "none":
         return text
+
+    label = _extract_classification_label(text)
+    if label is not None:
+        return label[:max_chars]
+
+    binary = _extract_binary_label(text)
+    if binary is not None and len(binary) <= max_chars:
+        return binary
 
     # Case: output starts with ": Answer.Human: ..."
     leading_match = re.search(r"^\s*[:：]\s*([^\n]+)", text)
@@ -72,7 +129,12 @@ def extract_final_answer(prediction: str, strategy: str = "heuristic", max_chars
             match = re.search(pattern, text, flags=re.MULTILINE)
             if match:
                 candidate = match.group(1).strip().splitlines()[0]
-                return _clean_candidate(candidate)[:max_chars]
+                cleaned = _clean_candidate(candidate)
+                label = _extract_classification_label(cleaned)
+                if label is not None:
+                    return label[:max_chars]
+                if cleaned:
+                    return cleaned[:max_chars]
 
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     if not lines:
@@ -81,10 +143,17 @@ def extract_final_answer(prediction: str, strategy: str = "heuristic", max_chars
     # Prefer short declarative lines near the end.
     for ln in reversed(lines):
         cleaned = _clean_candidate(ln)
+        label = _extract_classification_label(cleaned)
+        if label is not None:
+            return label[:max_chars]
         if cleaned and len(cleaned) <= max_chars:
             return cleaned
 
-    return _clean_candidate(lines[-1])[:max_chars]
+    cleaned = _clean_candidate(lines[-1])
+    label = _extract_classification_label(cleaned)
+    if label is not None:
+        return label[:max_chars]
+    return cleaned[:max_chars]
 
 
 def normalize_answer(text: str) -> str:

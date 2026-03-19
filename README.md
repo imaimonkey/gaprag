@@ -36,6 +36,10 @@ gaprag/
 
   configs/
     base.yaml
+    nq.yaml
+    hotpotqa.yaml
+    fever.yaml
+    continual_qa.yaml
     rag.yaml
     gaprag_no_memory.yaml
     gaprag_memory.yaml
@@ -49,6 +53,7 @@ gaprag/
     indices/
 
   scripts/
+    prepare_benchmark_data.py
     build_index.py
     run_eval.py
     run_continual_eval.py
@@ -102,6 +107,15 @@ uv sync
 This repo includes small demo files:
 - `data/processed/demo_corpus.jsonl`
 - `data/processed/demo_qa.jsonl`
+
+Research benchmark prep (NQ / HotpotQA / FEVER / Continual QA):
+
+```bash
+python scripts/prepare_benchmark_data.py --benchmark nq --nq-limit 500
+python scripts/prepare_benchmark_data.py --benchmark hotpotqa --hotpotqa-limit 500
+python scripts/prepare_benchmark_data.py --benchmark fever --fever-limit 500
+python scripts/prepare_benchmark_data.py --benchmark continual_qa --nq-limit 500 --hotpotqa-limit 500 --fever-limit 500
+```
 
 Expected QA schema:
 
@@ -176,10 +190,12 @@ sbatch scripts/run_experiments.sh
 ```
 
 Main env options:
+- `BENCHMARK_PROFILE` (`demo|nq|hotpotqa|fever|continual_qa`, default: `demo`)
 - `CONFIG_PATH` (default: `configs/base.yaml`)
 - `MODE` (default: `gap_memory_ema`)
 - `RUN_NAME` (optional)
-- `RUN_BUILD_INDEX` (`true/false`)
+- `PREP_BENCHMARK_DATA` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
+- `RUN_BUILD_INDEX` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
 - `RUN_EVAL_STATELESS` (`true/false`)
 - `RUN_EVAL_CONTINUAL` (`true/false`)
 - `RUN_ABLATION` (`true/false`)
@@ -188,9 +204,10 @@ Main env options:
 Example:
 
 ```bash
-CONFIG_PATH=configs/gaprag_memory.yaml \
+BENCHMARK_PROFILE=continual_qa \
 MODE=gap_memory_ema \
-RUN_BUILD_INDEX=true \
+PREP_BENCHMARK_DATA=auto \
+RUN_BUILD_INDEX=auto \
 RUN_EVAL_STATELESS=true \
 RUN_EVAL_CONTINUAL=true \
 RUN_ABLATION=false \

@@ -40,10 +40,24 @@ class GapEstimator:
         gap_type: str = "diff",
         target_dim: int | None = None,
         confidence_weight_source: str = "retrieval",
+        normalize_inputs: bool = True,
+        normalize_gap: bool = True,
+        max_gap_norm: float | None = 1.0,
     ) -> None:
         self.gap_type = gap_type
         self.target_dim = target_dim
         self.confidence_weight_source = confidence_weight_source
+        self.normalize_inputs = bool(normalize_inputs)
+        self.normalize_gap = bool(normalize_gap)
+        self.max_gap_norm = None if max_gap_norm is None else float(max_gap_norm)
+
+    @staticmethod
+    def _l2_normalize(vec: np.ndarray) -> np.ndarray:
+        x = np.asarray(vec, dtype=np.float32).reshape(-1)
+        norm = float(np.linalg.norm(x))
+        if norm <= 1e-8:
+            return x
+        return x / norm
 
     def _align_pair(self, query_vec: np.ndarray, evidence_vec: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         q = np.asarray(query_vec, dtype=np.float32).reshape(-1)
@@ -67,6 +81,9 @@ class GapEstimator:
         generation_uncertainty: float | None = None,
     ) -> GapEstimate:
         q_proj, d_proj = self._align_pair(query_vec, evidence_vec)
+        if self.normalize_inputs:
+            q_proj = self._l2_normalize(q_proj)
+            d_proj = self._l2_normalize(d_proj)
 
         if self.gap_type in {"diff", "proj_diff", "token_level_aligned"}:
             gap = d_proj - q_proj
@@ -84,6 +101,13 @@ class GapEstimator:
             elif retrieval_confidence is not None:
                 confidence = float(max(0.0, retrieval_confidence))
             gap = gap * confidence
+
+        if self.normalize_gap:
+            gap = self._l2_normalize(gap)
+        if self.max_gap_norm is not None:
+            gap_norm = float(np.linalg.norm(gap))
+            if gap_norm > self.max_gap_norm and gap_norm > 1e-8:
+                gap = gap * (self.max_gap_norm / gap_norm)
 
         return GapEstimate(
             vector=gap.astype(np.float32),
