@@ -21,6 +21,7 @@ from gaprag.metrics import (
     exact_match,
     extract_final_answer,
     hallucination_proxy,
+    is_label_classification_task,
     retrieval_hit_at_k,
     summarize_scores,
     token_f1,
@@ -77,6 +78,8 @@ def main() -> None:
         retrieved_ids = [d["doc_id"] for d in out.retrieved_docs]
         retrieved_texts = [d["text"] for d in out.retrieved_docs]
 
+        hall = 0.0 if is_label_classification_task(answers) else hallucination_proxy(parsed_prediction, retrieved_texts)
+
         row = {
             "id": item.get("id", i),
             "session_id": session_id,
@@ -90,7 +93,7 @@ def main() -> None:
             "exact_match": exact_match(parsed_prediction, answers),
             "f1": token_f1(parsed_prediction, answers),
             "retrieval_hit_at_k": retrieval_hit_at_k(retrieved_ids, item.get("context", [])),
-            "hallucination_proxy": hallucination_proxy(parsed_prediction, retrieved_texts),
+            "hallucination_proxy": hall,
             "gap_norm": out.gap_norm,
             "memory_norm": out.memory_norm,
             "prediction_confidence": out.prediction_confidence,

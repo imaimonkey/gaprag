@@ -129,7 +129,47 @@ if [[ -z "$CONFIG_PATH" ]]; then
   esac
 fi
 MODE="${MODE:-gap_memory_ema}"
+MODE_SUITE="${MODE_SUITE:-}"
 RUN_NAME="${RUN_NAME:-}"
+
+trim_csv_value() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+mode_to_slug() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]\+/_/g;s/^_//;s/_$//'
+}
+
+if [[ -n "$MODE_SUITE" && -z "${_GAPRAG_MODE_CHILD:-}" ]]; then
+  IFS=',' read -r -a MODE_LIST <<< "$MODE_SUITE"
+  if [[ ${#MODE_LIST[@]} -eq 0 ]]; then
+    echo "MODE_SUITE is set but empty after parsing: '$MODE_SUITE'"
+    exit 1
+  fi
+  echo "=========================================="
+  echo "GapRAG mode suite"
+  echo "BENCHMARK_PROFILE=$BENCHMARK_PROFILE"
+  echo "MODE_SUITE=$MODE_SUITE"
+  echo "=========================================="
+  for raw_mode in "${MODE_LIST[@]}"; do
+    run_mode="$(trim_csv_value "$raw_mode")"
+    [[ -z "$run_mode" ]] && continue
+    mode_slug="$(mode_to_slug "$run_mode")"
+    if [[ -n "$RUN_NAME" ]]; then
+      child_run_name="${RUN_NAME}_${mode_slug}"
+    else
+      child_run_name="run_${BENCHMARK_PROFILE}_${mode_slug}"
+    fi
+    echo "[MODE_SUITE] >>> mode=$run_mode run_name=$child_run_name"
+    if ! env _GAPRAG_MODE_CHILD=1 MODE_SUITE="" MODE="$run_mode" RUN_NAME="$child_run_name" bash "$0"; then
+      echo "[MODE_SUITE] failed at mode=$run_mode"
+      exit 1
+    fi
+    echo "[MODE_SUITE] <<< done mode=$run_mode"
+  done
+  echo "[MODE_SUITE] all modes completed."
+  exit 0
+fi
 
 PREP_BENCHMARK_DATA="${PREP_BENCHMARK_DATA:-}"
 if [[ -z "$PREP_BENCHMARK_DATA" ]]; then
@@ -156,7 +196,7 @@ if [[ -z "$RUN_BUILD_INDEX" ]]; then
   fi
 fi
 RUN_EVAL_STATELESS="${RUN_EVAL_STATELESS:-true}"
-RUN_EVAL_CONTINUAL="${RUN_EVAL_CONTINUAL:-true}"
+RUN_EVAL_CONTINUAL="${RUN_EVAL_CONTINUAL:-auto}"
 RUN_ABLATION="${RUN_ABLATION:-false}"
 ABLATION_CONFIG="${ABLATION_CONFIG:-configs/ablation_gap_defs.yaml}"
 
@@ -226,12 +266,23 @@ should_build_index() {
   is_true "$RUN_BUILD_INDEX"
 }
 
+should_run_continual() {
+  local mode
+  mode="$(echo "$RUN_EVAL_CONTINUAL" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$mode" == "auto" ]]; then
+    [[ "$BENCHMARK_PROFILE" == "demo" || "$BENCHMARK_PROFILE" == "continual_qa" ]]
+    return
+  fi
+  is_true "$RUN_EVAL_CONTINUAL"
+}
+
 echo "=========================================="
 echo "GapRAG batch run"
 echo "ROOT_DIR=$ROOT_DIR"
 echo "BENCHMARK_PROFILE=$BENCHMARK_PROFILE"
 echo "CONFIG_PATH=$CONFIG_PATH"
 echo "MODE=$MODE"
+echo "MODE_SUITE=$MODE_SUITE"
 echo "PREP_BENCHMARK_DATA=$PREP_BENCHMARK_DATA (benchmark=$PREP_BENCHMARK)"
 echo "RUN_BUILD_INDEX=$RUN_BUILD_INDEX"
 echo "RUN_EVAL_STATELESS=$RUN_EVAL_STATELESS"
@@ -274,7 +325,7 @@ if is_true "$RUN_EVAL_STATELESS"; then
   "$PYTHON_BIN" scripts/run_eval.py "${COMMON_ARGS[@]}" --mode "$MODE" --stateless
 fi
 
-if is_true "$RUN_EVAL_CONTINUAL"; then
+if should_run_continual; then
   echo "[RUN] eval_continual mode=$MODE"
   "$PYTHON_BIN" scripts/run_continual_eval.py "${COMMON_ARGS[@]}" --mode "$MODE"
 fi

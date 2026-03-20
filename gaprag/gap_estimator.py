@@ -11,6 +11,7 @@ class GapEstimate:
     query_proj: np.ndarray
     evidence_proj: np.ndarray
     confidence_weight: float
+    raw_gap_norm: float
 
 
 class FixedLinearAligner:
@@ -91,6 +92,7 @@ class GapEstimator:
             gap = d_proj - q_proj
         else:
             raise ValueError(f"Unsupported gap type: {self.gap_type}")
+        raw_gap_norm = float(np.linalg.norm(gap))
 
         confidence = 1.0
         if self.gap_type == "confidence_weighted":
@@ -114,4 +116,5 @@ class GapEstimator:
             query_proj=q_proj.astype(np.float32),
             evidence_proj=d_proj.astype(np.float32),
             confidence_weight=float(confidence),
+            raw_gap_norm=raw_gap_norm,
         )

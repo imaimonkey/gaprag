@@ -102,6 +102,11 @@ def canonicalize_prediction(prediction: str, answers: Iterable[str]) -> str:
     return value
 
 
+def is_label_classification_task(answers: Iterable[str]) -> bool:
+    answer_set = {str(answer).strip().upper() for answer in answers if str(answer).strip()}
+    return bool(answer_set) and answer_set.issubset(_FEVER_LABELS)
+
+
 def extract_final_answer(prediction: str, strategy: str = "heuristic", max_chars: int = 80) -> str:
     text = str(prediction or "").strip()
     if not text:

@@ -75,6 +75,7 @@ If your cluster changes, edit only these header lines in `scripts/run_experiment
   - `demo`, `nq`, `hotpotqa`, `fever`, `continual_qa`
 - `CONFIG_PATH` (optional; if empty, selected automatically from `BENCHMARK_PROFILE`)
 - `MODE` (default: `gap_memory_ema`)
+- `MODE_SUITE` (optional comma-separated mode sweep)
 - `RUN_NAME` (optional)
 - `PREP_BENCHMARK_DATA` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
 - `PREP_BENCHMARK` (default: same as `BENCHMARK_PROFILE`)
@@ -82,9 +83,14 @@ If your cluster changes, edit only these header lines in `scripts/run_experiment
 - `NQ_PREP_SPLIT`, `HOTPOTQA_PREP_SPLIT`, `FEVER_PREP_SPLIT` (default: `validation`)
 - `RUN_BUILD_INDEX` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
 - `RUN_EVAL_STATELESS` (`true/false`)
-- `RUN_EVAL_CONTINUAL` (`true/false`)
+- `RUN_EVAL_CONTINUAL` (`auto/true/false`, default: `auto`)
 - `RUN_ABLATION` (`true/false`)
 - `ABLATION_CONFIG` (default: `configs/ablation_gap_defs.yaml`)
+
+Recommended benchmark roles:
+- `nq`, `hotpotqa`, `fever`: stateless benchmark first
+- `continual_qa`: continual-memory benchmark
+- with `RUN_EVAL_CONTINUAL=auto`, only `demo` and `continual_qa` run stateless-vs-continual by default
 
 ### 3.2 Example
 
@@ -100,6 +106,17 @@ RUN_BUILD_INDEX=auto \
 RUN_EVAL_STATELESS=true \
 RUN_EVAL_CONTINUAL=true \
 RUN_ABLATION=false \
+sbatch scripts/run_experiments.sh
+```
+
+### 3.2.b Recommended continual method sweep
+
+```bash
+BENCHMARK_PROFILE=continual_qa \
+MODE_SUITE=standard_rag,gap_current,gap_memory_keyed,gap_memory_ema \
+RUN_NAME=exp_continual_suite \
+PREP_BENCHMARK_DATA=auto \
+RUN_BUILD_INDEX=auto \
 sbatch scripts/run_experiments.sh
 ```
 

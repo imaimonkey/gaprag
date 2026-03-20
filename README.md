@@ -183,7 +183,7 @@ Generates:
 
 ## Slurm Batch Execution
 
-`run_experiments.sh` supports index build / eval / continual / ablation toggles.
+`run_experiments.sh` supports index build / eval / continual / ablation toggles, and now also supports `MODE_SUITE` for one-allocation method sweeps.
 
 ```bash
 sbatch scripts/run_experiments.sh
@@ -193,13 +193,19 @@ Main env options:
 - `BENCHMARK_PROFILE` (`demo|nq|hotpotqa|fever|continual_qa`, default: `demo`)
 - `CONFIG_PATH` (default: `configs/base.yaml`)
 - `MODE` (default: `gap_memory_ema`)
+- `MODE_SUITE` (optional comma-separated sweep, example: `standard_rag,gap_current,gap_memory_keyed,gap_memory_ema`)
 - `RUN_NAME` (optional)
 - `PREP_BENCHMARK_DATA` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
 - `RUN_BUILD_INDEX` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
 - `RUN_EVAL_STATELESS` (`true/false`)
-- `RUN_EVAL_CONTINUAL` (`true/false`)
+- `RUN_EVAL_CONTINUAL` (`auto/true/false`, default: `auto`)
 - `RUN_ABLATION` (`true/false`)
 - `ABLATION_CONFIG` (default: `configs/ablation_gap_defs.yaml`)
+
+Recommended benchmark roles:
+- `nq`, `hotpotqa`, `fever`: stateless/general QA or verification evaluation
+- `continual_qa`: persistent-memory evaluation
+- with `RUN_EVAL_CONTINUAL=auto`, continual comparison runs only for `demo` and `continual_qa`
 
 Example:
 
@@ -211,6 +217,17 @@ RUN_BUILD_INDEX=auto \
 RUN_EVAL_STATELESS=true \
 RUN_EVAL_CONTINUAL=true \
 RUN_ABLATION=false \
+sbatch scripts/run_experiments.sh
+```
+
+Recommended method sweep on the continual benchmark:
+
+```bash
+BENCHMARK_PROFILE=continual_qa \
+MODE_SUITE=standard_rag,gap_current,gap_memory_keyed,gap_memory_ema \
+RUN_NAME=run_continual_suite \
+PREP_BENCHMARK_DATA=auto \
+RUN_BUILD_INDEX=auto \
 sbatch scripts/run_experiments.sh
 ```
 

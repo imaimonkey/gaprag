@@ -36,23 +36,31 @@ gap:
   target_dim: null
   hidden_layer: -1
   hidden_pooling: mean_pool
+  normalize_inputs: true
+  normalize_gap: false
+  max_gap_norm: 0.9
 
 memory:
   type: ema
-  ema_decay: 0.9
+  ema_decay: 0.8
   max_items: 256
   temperature: 0.1
+  read_mode: blend_current
+  current_gap_weight: 0.5
+  cold_start: current_gap
 
 injection:
-  mode: residual_hidden
-  alpha: 0.35
+  mode: prefix_bias
+  alpha: 0.12
+  prefix_length: 2
 
 prompt:
   vanilla_template: "Question: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
   context_prefix: "Context:\n"
   context_sep: "\n\n"
   rag_template: "{context}\n\nQuestion: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
-  injection_target: last_token
+  injection_target: all_tokens
+  prefix_length: 2
 
 evaluation:
   answer_parse_strategy: heuristic

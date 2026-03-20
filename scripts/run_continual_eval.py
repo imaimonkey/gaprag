@@ -21,12 +21,51 @@ from gaprag.metrics import (
     exact_match,
     extract_final_answer,
     hallucination_proxy,
+    is_label_classification_task,
     retrieval_hit_at_k,
     summarize_scores,
     token_f1,
 )
 from gaprag.pipeline import GapRAGPipeline
 from gaprag.utils import load_yaml, save_json, save_jsonl, set_seed
+
+
+def build_compare_summary(
+    rows_stateless: list[dict],
+    rows_continual: list[dict],
+    summary_stateless: dict,
+    summary_continual: dict,
+    mode: str,
+    seed: int,
+) -> dict:
+    paired = min(len(rows_stateless), len(rows_continual))
+    changed_raw = 0
+    changed_prediction = 0
+    improved = 0
+    regressed = 0
+
+    for s_row, c_row in zip(rows_stateless, rows_continual):
+        changed_raw += int(s_row.get("prediction_raw") != c_row.get("prediction_raw"))
+        changed_prediction += int(s_row.get("prediction") != c_row.get("prediction"))
+        improved += int(float(c_row.get("exact_match", 0.0)) > float(s_row.get("exact_match", 0.0)))
+        regressed += int(float(c_row.get("exact_match", 0.0)) < float(s_row.get("exact_match", 0.0)))
+
+    return {
+        "mode": mode,
+        "seed": seed,
+        "stateless": summary_stateless,
+        "continual": summary_continual,
+        "delta_exact_match": summary_continual["exact_match"] - summary_stateless["exact_match"],
+        "delta_f1": summary_continual["f1"] - summary_stateless["f1"],
+        "delta_retrieval_hit_at_k": summary_continual["retrieval_hit_at_k"] - summary_stateless["retrieval_hit_at_k"],
+        "paired_count": paired,
+        "changed_raw_count": changed_raw,
+        "changed_raw_rate": (changed_raw / paired) if paired else 0.0,
+        "changed_prediction_count": changed_prediction,
+        "changed_prediction_rate": (changed_prediction / paired) if paired else 0.0,
+        "improved_count": improved,
+        "regressed_count": regressed,
+    }
 
 
 def run_setting(
@@ -62,7 +101,7 @@ def run_setting(
         em = exact_match(parsed_prediction, item.get("answers", []))
         f1 = token_f1(parsed_prediction, item.get("answers", []))
         hit = retrieval_hit_at_k(retrieved_ids, item.get("context", []))
-        hall = hallucination_proxy(parsed_prediction, retrieved_texts)
+        hall = 0.0 if is_label_classification_task(item.get("answers", [])) else hallucination_proxy(parsed_prediction, retrieved_texts)
         em_raw = exact_match(out.prediction, item.get("answers", []))
         f1_raw = token_f1(out.prediction, item.get("answers", []))
 
@@ -154,20 +193,26 @@ def main() -> None:
     save_json(summary_stateless, run_dir / "summary_stateless.json")
     save_json(summary_continual, run_dir / "summary_continual.json")
 
-    compare = {
-        "mode": mode,
-        "seed": seed,
-        "stateless": summary_stateless,
-        "continual": summary_continual,
-        "delta_exact_match": summary_continual["exact_match"] - summary_stateless["exact_match"],
-        "delta_f1": summary_continual["f1"] - summary_stateless["f1"],
-        "delta_retrieval_hit_at_k": summary_continual["retrieval_hit_at_k"] - summary_stateless["retrieval_hit_at_k"],
-    }
+    compare = build_compare_summary(
+        rows_stateless=rows_stateless,
+        rows_continual=rows_continual,
+        summary_stateless=summary_stateless,
+        summary_continual=summary_continual,
+        mode=mode,
+        seed=seed,
+    )
     save_json(compare, run_dir / "compare_summary.json")
 
     logger.info("run_dir=%s", run_dir)
     logger.info("mode=%s seed=%d", mode, seed)
-    logger.info("stateless EM=%.4f | continual EM=%.4f | delta=%.4f", summary_stateless["exact_match"], summary_continual["exact_match"], compare["delta_exact_match"])
+    logger.info(
+        "stateless EM=%.4f | continual EM=%.4f | delta=%.4f | changed_raw=%d/%d",
+        summary_stateless["exact_match"],
+        summary_continual["exact_match"],
+        compare["delta_exact_match"],
+        compare["changed_raw_count"],
+        compare["paired_count"],
+    )
 
 
 if __name__ == "__main__":

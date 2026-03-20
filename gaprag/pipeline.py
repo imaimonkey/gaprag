@@ -93,20 +93,34 @@ class GapRAGPipeline:
                 "used_previous_memory": False,
                 "cold_start": source,
                 "current_gap_weight": current_gap_weight,
+                "memory_component_norm": 0.0,
+                "current_component_norm": float(np.linalg.norm(injected)),
             }
 
         if read_mode == "memory_only":
             injected = previous_memory
+            current_component = np.zeros_like(gap_vec)
+            memory_component = previous_memory
         elif read_mode == "memory_or_current_gap":
             injected = previous_memory
+            current_component = np.zeros_like(gap_vec)
+            memory_component = previous_memory
         else:
-            injected = (current_gap_weight * gap_vec) + ((1.0 - current_gap_weight) * previous_memory)
+            current_component = current_gap_weight * gap_vec
+            memory_component = (1.0 - current_gap_weight) * previous_memory
+            injected = current_component + memory_component
 
         return injected.astype(np.float32, copy=False), {
             "read_mode": read_mode,
             "used_previous_memory": True,
             "cold_start": "n/a",
             "current_gap_weight": current_gap_weight,
+            "memory_component_norm": float(np.linalg.norm(memory_component)),
+            "current_component_norm": float(np.linalg.norm(current_component)),
+            "prev_gap_cosine": safe_div(
+                float(np.dot(previous_memory, gap_vec)),
+                float(np.linalg.norm(previous_memory) * np.linalg.norm(gap_vec)),
+            ),
         }
 
     @classmethod
@@ -338,6 +352,8 @@ class GapRAGPipeline:
                 "current_norm": float(np.linalg.norm(gap_vec)),
                 "injected_norm": float(np.linalg.norm(gap_vec)),
                 "read_mode": "current_gap_only",
+                "memory_component_norm": 0.0,
+                "current_component_norm": float(np.linalg.norm(gap_vec)),
             }
         else:
             memory = self._get_session_memory(run_mode, session_id)
@@ -401,6 +417,7 @@ class GapRAGPipeline:
                 "type": self.gap_estimator.gap_type,
                 "evidence_source": self.evidence_source,
                 "confidence_weight": gap_estimate.confidence_weight,
+                "raw_gap_norm": gap_estimate.raw_gap_norm,
                 "avg_retrieval_score": float(np.mean(retrieval_scores)) if retrieval_scores.size else 0.0,
                 "retrieval_top_prob": retrieval_conf,
             },

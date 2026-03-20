@@ -35,20 +35,25 @@ gap:
   type: diff
   hidden_layer: -1
   hidden_pooling: last_token
+  normalize_inputs: true
+  normalize_gap: false
+  max_gap_norm: 0.9
 
 memory:
   type: none
 
 injection:
-  mode: residual_hidden
-  alpha: 0.3
+  mode: prefix_bias
+  alpha: 0.12
+  prefix_length: 2
 
 prompt:
   vanilla_template: "Question: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
   context_prefix: "Context:\n"
   context_sep: "\n\n"
   rag_template: "{context}\n\nQuestion: {question}\nRespond with only the final short answer in English. No explanation.\nAnswer:"
-  injection_target: last_token
+  injection_target: all_tokens
+  prefix_length: 2
 
 evaluation:
   answer_parse_strategy: heuristic
