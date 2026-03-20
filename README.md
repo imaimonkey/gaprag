@@ -11,6 +11,7 @@ The codebase originally explored persistent latent discrepancy memory for contin
 
 Current supported empirical takeaways from this repo are:
 - `FEVER`: latent discrepancy injection can help label-style verification.
+- `HoVer`, `FEVEROUS`, `AVeriTeC`: now integrated as verification-family benchmarks in this repo.
 - `NQ`, `HotpotQA`: the same injection does **not** transfer cleanly to free-form QA.
 - `continual_qa`: persistent memory does not currently yield positive continual gain.
 
@@ -42,19 +43,19 @@ Interpretation:
 
 Implemented now:
 - `fever`
+- `hover`
+- `feverous`
+- `averitec`
 - `nq`
 - `hotpotqa`
 - `continual_qa`
 
 Recommended roles:
-- `fever`: main verification benchmark in the current codebase
-- `nq`, `hotpotqa`: transfer-boundary / negative-transfer analysis
-- `continual_qa`: memory diagnostic benchmark
+- `fever`, `hover`, `feverous`, `averitec`: main verification benchmark family
+- `nq`, `hotpotqa`: legacy transfer-boundary / negative-transfer analysis
+- `continual_qa`: legacy memory diagnostic benchmark
 
-Not yet integrated, but highest-priority next verification benchmarks:
-- `AVeriTeC`
-- `HoVer`
-- `FEVEROUS`
+Next verification benchmarks:
 - optional: `SciFact`, `Climate-FEVER`
 
 ## Core Idea
@@ -87,6 +88,9 @@ gapverify/
     nq.yaml
     hotpotqa.yaml
     fever.yaml
+    hover.yaml
+    feverous.yaml
+    averitec.yaml
     continual_qa.yaml
     rag.yaml
     gapverify_current.yaml
@@ -152,15 +156,21 @@ uv sync
 ## Data Preparation
 
 Current local benchmark adapters prepare:
+- `fever`
+- `hover`
+- `feverous`
+- `averitec`
 - `nq`
 - `hotpotqa`
-- `fever`
 - `continual_qa`
 
 ```bash
+uv run python scripts/prepare_benchmark_data.py --benchmark fever --fever-limit 500
+uv run python scripts/prepare_benchmark_data.py --benchmark hover --hover-limit 500
+uv run python scripts/prepare_benchmark_data.py --benchmark feverous --feverous-limit 500
+uv run python scripts/prepare_benchmark_data.py --benchmark averitec --averitec-limit 500
 uv run python scripts/prepare_benchmark_data.py --benchmark nq --nq-limit 500
 uv run python scripts/prepare_benchmark_data.py --benchmark hotpotqa --hotpotqa-limit 500
-uv run python scripts/prepare_benchmark_data.py --benchmark fever --fever-limit 500
 uv run python scripts/prepare_benchmark_data.py --benchmark continual_qa --nq-limit 500 --hotpotqa-limit 500 --fever-limit 500
 ```
 
@@ -185,18 +195,36 @@ uv run python scripts/build_index.py --config configs/base.yaml
 
 ## Recommended Experiment Menu
 
-### 1. Main verification run
+### 0. One-command default
 
-Current best-supported main run in this repo:
+If you just run:
 
 ```bash
-BENCHMARK_PROFILE=fever \
+cd /home/kimhj/GapVerify/scripts
+sbatch run_experiments.sh
+```
+
+the script now defaults to:
+- `EXPERIMENT_PRESET=verification_core`
+- `BENCHMARK_SUITE=fever,hover,feverous,averitec`
+- `MODE_SUITE=standard_rag,gap_current`
+- `PREP_BENCHMARK_DATA=true`
+- `RUN_BUILD_INDEX=true`
+- `RUN_EVAL_STATELESS=true`
+- `RUN_EVAL_CONTINUAL=false`
+
+### 1. Main verification run
+
+Current verification-core run in this repo:
+
+```bash
+BENCHMARK_SUITE=fever,hover,feverous,averitec \
 MODE_SUITE=standard_rag,gap_current \
-RUN_NAME=run_fever_verification \
+RUN_NAME_PREFIX=run_verification_core \
 PREP_BENCHMARK_DATA=auto \
 RUN_BUILD_INDEX=auto \
 RUN_EVAL_STATELESS=true \
-RUN_EVAL_CONTINUAL=auto \
+RUN_EVAL_CONTINUAL=false \
 sbatch scripts/run_experiments.sh
 ```
 
@@ -224,9 +252,20 @@ sbatch scripts/run_experiments.sh
 ```
 
 Interpretation:
-- use `fever` as the main positive benchmark
-- use `nq` / `hotpotqa` to show task-boundary failure cases
-- use `continual_qa` to keep persistent memory claims honest
+- use `fever`, `hover`, `feverous`, `averitec` as the main verification family
+- use `nq` / `hotpotqa` only as optional task-boundary failure cases
+- use `continual_qa` only to keep persistent memory claims honest
+
+### Preset Shortcuts
+
+```bash
+EXPERIMENT_PRESET=verification_core sbatch scripts/run_experiments.sh
+EXPERIMENT_PRESET=transfer_boundary sbatch scripts/run_experiments.sh
+EXPERIMENT_PRESET=memory_diagnostic sbatch scripts/run_experiments.sh
+EXPERIMENT_PRESET=fever_only sbatch scripts/run_experiments.sh
+```
+
+Use `EXPERIMENT_PRESET=custom` only when you want to fully specify `BENCHMARK_PROFILE`, `BENCHMARK_SUITE`, `MODE`, or `MODE_SUITE` yourself.
 
 ## Run Baselines / Methods Directly
 

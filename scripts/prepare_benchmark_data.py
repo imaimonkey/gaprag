@@ -44,6 +44,33 @@ class PreparedSplit:
     qa: list[dict[str, Any]]
 
 
+_THREE_WAY_LABELS = {
+    0: "SUPPORTS",
+    1: "REFUTES",
+    2: "NOT ENOUGH INFO",
+}
+
+
+def _canonicalize_averitec_label(value: Any) -> str:
+    raw = str(value or "").strip().upper()
+    mapping = {
+        "SUPPORTED": "SUPPORTED",
+        "SUPPORTS": "SUPPORTED",
+        "REFUTED": "REFUTED",
+        "REFUTES": "REFUTED",
+        "NOT ENOUGH EVIDENCE": "NOT ENOUGH EVIDENCE",
+        "NOT_ENOUGH_EVIDENCE": "NOT ENOUGH EVIDENCE",
+        "NOT ENOUGH INFO": "NOT ENOUGH EVIDENCE",
+        "NEI": "NOT ENOUGH EVIDENCE",
+        "CONFLICTING EVIDENCE/CHERRYPICKING": "CONFLICTING EVIDENCE/CHERRYPICKING",
+        "CONFLICTING EVIDENCE / CHERRYPICKING": "CONFLICTING EVIDENCE/CHERRYPICKING",
+        "CONFLICTING EVIDENCE": "CONFLICTING EVIDENCE/CHERRYPICKING",
+        "CHERRYPICKING": "CONFLICTING EVIDENCE/CHERRYPICKING",
+        "CHERRY PICKING": "CONFLICTING EVIDENCE/CHERRYPICKING",
+    }
+    return mapping.get(raw, raw)
+
+
 def _prepare_nq(limit: int, split: str) -> PreparedSplit:
     ds = load_dataset("cjlovering/natural-questions-short", split=split)
     if limit > 0:
@@ -239,6 +266,211 @@ def _prepare_fever(limit: int, split: str) -> PreparedSplit:
     return PreparedSplit(benchmark="fever", corpus=list(docs.values()), qa=qa_rows)
 
 
+def _prepare_hover(limit: int, split: str) -> PreparedSplit:
+    ds = load_dataset("Dzeniks/hover-3way", split=split)
+    if limit > 0:
+        ds = ds.select(range(min(limit, len(ds))))
+
+    docs: dict[str, dict[str, Any]] = {}
+    qa_rows: list[dict[str, Any]] = []
+
+    for i, item in enumerate(ds):
+        source_id = str(item.get("id", i))
+        claim = str(item.get("claim", "")).strip()
+        evidence = str(item.get("evidence", "")).strip()
+        raw_label = item.get("label")
+        try:
+            label = _THREE_WAY_LABELS[int(raw_label)]
+        except Exception:
+            continue
+
+        if not claim or not evidence:
+            continue
+
+        did = _doc_id("hover", f"{source_id}::evidence")
+        docs[did] = {
+            "id": did,
+            "text": evidence,
+            "metadata": {
+                "benchmark": "hover",
+                "source_dataset": "Dzeniks/hover-3way",
+                "source_id": source_id,
+            },
+        }
+        qa_rows.append(
+            {
+                "id": f"hover::{source_id}",
+                "question": claim,
+                "answers": [label],
+                "context": [did],
+                "metadata": {
+                    "benchmark": "hover",
+                    "source_dataset": "Dzeniks/hover-3way",
+                    "source_id": source_id,
+                },
+                "session_id": f"hover::{source_id}",
+            }
+        )
+
+    return PreparedSplit(benchmark="hover", corpus=list(docs.values()), qa=qa_rows)
+
+
+def _prepare_feverous(limit: int, split: str) -> PreparedSplit:
+    ds = load_dataset("KingTechnician/feverous-label-evidence", split=split)
+    if limit > 0:
+        ds = ds.select(range(min(limit, len(ds))))
+
+    label_feature = ds.features.get("label")
+    label_names = getattr(label_feature, "names", None)
+
+    docs: dict[str, dict[str, Any]] = {}
+    qa_rows: list[dict[str, Any]] = []
+
+    for i, item in enumerate(ds):
+        source_id = str(item.get("id", i))
+        claim = str(item.get("claim", "")).strip()
+        evidence = str(item.get("evidence", "")).strip()
+        raw_label = item.get("label")
+        if isinstance(raw_label, int) and label_names and 0 <= raw_label < len(label_names):
+            label = str(label_names[raw_label]).strip().upper()
+        else:
+            label = str(raw_label).strip().upper()
+        if not claim or not evidence or not label:
+            continue
+
+        did = _doc_id("feverous", f"{source_id}::evidence")
+        docs[did] = {
+            "id": did,
+            "text": evidence,
+            "metadata": {
+                "benchmark": "feverous",
+                "source_dataset": "KingTechnician/feverous-label-evidence",
+                "source_id": source_id,
+                "challenge": str(item.get("challenge", "")),
+            },
+        }
+        qa_rows.append(
+            {
+                "id": f"feverous::{source_id}",
+                "question": claim,
+                "answers": [label],
+                "context": [did],
+                "metadata": {
+                    "benchmark": "feverous",
+                    "source_dataset": "KingTechnician/feverous-label-evidence",
+                    "source_id": source_id,
+                    "challenge": str(item.get("challenge", "")),
+                },
+                "session_id": f"feverous::{_slug(item.get('challenge', source_id))}",
+            }
+        )
+
+    return PreparedSplit(benchmark="feverous", corpus=list(docs.values()), qa=qa_rows)
+
+
+def _prepare_averitec(limit: int, split: str) -> PreparedSplit:
+    ds = load_dataset("pminervini/averitec", split=split)
+    if limit > 0:
+        ds = ds.select(range(min(limit, len(ds))))
+
+    docs: dict[str, dict[str, Any]] = {}
+    qa_rows: list[dict[str, Any]] = []
+
+    for i, item in enumerate(ds):
+        source_id = str(item.get("claim_id", i))
+        claim = str(item.get("claim", "")).strip()
+        label = _canonicalize_averitec_label(item.get("label"))
+        if not claim or not label:
+            continue
+
+        gold_ids: list[str] = []
+        questions = item.get("questions", []) or []
+        for q_idx, question_block in enumerate(questions):
+            if not isinstance(question_block, dict):
+                continue
+            subq = str(question_block.get("question", "")).strip()
+            answers = question_block.get("answers", []) or []
+            for a_idx, answer_block in enumerate(answers):
+                if not isinstance(answer_block, dict):
+                    continue
+                answer_text = str(answer_block.get("answer", "")).strip()
+                explanation = str(answer_block.get("boolean_explanation", "")).strip()
+                source_url = str(answer_block.get("source_url", "")).strip()
+                cached_url = str(answer_block.get("cached_source_url", "")).strip()
+                source_medium = str(answer_block.get("source_medium", "")).strip()
+                evidence_parts = []
+                if subq:
+                    evidence_parts.append(f"Subquestion: {subq}")
+                if answer_text:
+                    evidence_parts.append(f"Answer: {answer_text}")
+                if explanation:
+                    evidence_parts.append(f"Explanation: {explanation}")
+                if source_medium:
+                    evidence_parts.append(f"Source medium: {source_medium}")
+                if source_url:
+                    evidence_parts.append(f"Source URL: {source_url}")
+                elif cached_url:
+                    evidence_parts.append(f"Cached source URL: {cached_url}")
+                evidence_text = "\n".join(evidence_parts).strip()
+                if not evidence_text:
+                    continue
+                did = _doc_id("averitec", f"{source_id}::{q_idx}::{a_idx}")
+                gold_ids.append(did)
+                if did not in docs:
+                    docs[did] = {
+                        "id": did,
+                        "text": evidence_text,
+                        "metadata": {
+                            "benchmark": "averitec",
+                            "source_dataset": "pminervini/averitec",
+                            "claim_id": source_id,
+                            "subquestion_idx": q_idx,
+                            "answer_idx": a_idx,
+                        },
+                    }
+
+        justification = str(item.get("justification", "")).strip()
+        if not gold_ids and justification:
+            did = _doc_id("averitec", f"{source_id}::justification")
+            gold_ids.append(did)
+            docs[did] = {
+                "id": did,
+                "text": f"Justification: {justification}",
+                "metadata": {
+                    "benchmark": "averitec",
+                    "source_dataset": "pminervini/averitec",
+                    "claim_id": source_id,
+                    "fallback": "justification_only",
+                },
+            }
+
+        if not gold_ids:
+            continue
+
+        speaker = str(item.get("speaker", "")).strip()
+        reporting_source = str(item.get("reporting_source", "")).strip()
+        session_key = speaker or reporting_source or source_id
+        qa_rows.append(
+            {
+                "id": f"averitec::{source_id}",
+                "question": claim,
+                "answers": [label],
+                "context": _dedup_list(gold_ids),
+                "metadata": {
+                    "benchmark": "averitec",
+                    "source_dataset": "pminervini/averitec",
+                    "claim_id": source_id,
+                    "speaker": speaker,
+                    "reporting_source": reporting_source,
+                    "claim_date": str(item.get("claim_date", "")).strip(),
+                },
+                "session_id": f"averitec::{_slug(session_key)}",
+            }
+        )
+
+    return PreparedSplit(benchmark="averitec", corpus=list(docs.values()), qa=qa_rows)
+
+
 def _annotate_rows(name: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     annotated: list[dict[str, Any]] = []
     for base in rows:
@@ -321,16 +553,31 @@ def main() -> None:
     parser.add_argument(
         "--benchmark",
         required=True,
-        choices=["nq", "hotpotqa", "fever", "continual_qa", "all"],
+        choices=[
+            "nq",
+            "hotpotqa",
+            "fever",
+            "hover",
+            "feverous",
+            "averitec",
+            "continual_qa",
+            "all",
+        ],
     )
     parser.add_argument("--output-dir", default="data/processed")
     parser.add_argument("--summary-path", default="data/processed/benchmark_summary.json")
     parser.add_argument("--nq-limit", type=int, default=500)
     parser.add_argument("--hotpotqa-limit", type=int, default=500)
     parser.add_argument("--fever-limit", type=int, default=500)
+    parser.add_argument("--hover-limit", type=int, default=500)
+    parser.add_argument("--feverous-limit", type=int, default=500)
+    parser.add_argument("--averitec-limit", type=int, default=500)
     parser.add_argument("--nq-split", default="validation")
     parser.add_argument("--hotpotqa-split", default="validation")
     parser.add_argument("--fever-split", default="validation")
+    parser.add_argument("--hover-split", default="validation")
+    parser.add_argument("--feverous-split", default="validation")
+    parser.add_argument("--averitec-split", default="dev")
     parser.add_argument("--continual-min-session-size", type=int, default=2)
     parser.add_argument(
         "--continual-order",
@@ -345,6 +592,9 @@ def main() -> None:
     need_nq = args.benchmark in {"nq", "continual_qa", "all"}
     need_hotpot = args.benchmark in {"hotpotqa", "continual_qa", "all"}
     need_fever = args.benchmark in {"fever", "continual_qa", "all"}
+    need_hover = args.benchmark in {"hover", "all"}
+    need_feverous = args.benchmark in {"feverous", "all"}
+    need_averitec = args.benchmark in {"averitec", "all"}
 
     prepared: dict[str, PreparedSplit] = {}
     summary: dict[str, Any] = {}
@@ -376,6 +626,39 @@ def main() -> None:
         corpus_path, qa_path = _write_split(split, out_dir)
         prepared["fever"] = split
         summary["fever"] = {
+            "corpus_path": str(corpus_path),
+            "qa_path": str(qa_path),
+            "num_docs": len(split.corpus),
+            "num_qa": len(split.qa),
+        }
+
+    if need_hover:
+        split = _prepare_hover(limit=args.hover_limit, split=args.hover_split)
+        corpus_path, qa_path = _write_split(split, out_dir)
+        prepared["hover"] = split
+        summary["hover"] = {
+            "corpus_path": str(corpus_path),
+            "qa_path": str(qa_path),
+            "num_docs": len(split.corpus),
+            "num_qa": len(split.qa),
+        }
+
+    if need_feverous:
+        split = _prepare_feverous(limit=args.feverous_limit, split=args.feverous_split)
+        corpus_path, qa_path = _write_split(split, out_dir)
+        prepared["feverous"] = split
+        summary["feverous"] = {
+            "corpus_path": str(corpus_path),
+            "qa_path": str(qa_path),
+            "num_docs": len(split.corpus),
+            "num_qa": len(split.qa),
+        }
+
+    if need_averitec:
+        split = _prepare_averitec(limit=args.averitec_limit, split=args.averitec_split)
+        corpus_path, qa_path = _write_split(split, out_dir)
+        prepared["averitec"] = split
+        summary["averitec"] = {
             "corpus_path": str(corpus_path),
             "qa_path": str(qa_path),
             "num_docs": len(split.corpus),

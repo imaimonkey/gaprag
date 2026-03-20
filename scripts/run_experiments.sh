@@ -11,6 +11,15 @@
 set -euo pipefail
 trap 'echo "[ERROR] line=${LINENO} cmd=${BASH_COMMAND}" >&2' ERR
 
+# Default behavior:
+#   sbatch scripts/run_experiments.sh
+# runs EXPERIMENT_PRESET=verification_core.
+# Useful overrides:
+#   EXPERIMENT_PRESET=transfer_boundary sbatch scripts/run_experiments.sh
+#   EXPERIMENT_PRESET=memory_diagnostic sbatch scripts/run_experiments.sh
+#   EXPERIMENT_PRESET=fever_only sbatch scripts/run_experiments.sh
+#   EXPERIMENT_PRESET=custom BENCHMARK_PROFILE=fever MODE_SUITE=standard_rag,gap_current sbatch scripts/run_experiments.sh
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 find_repo_root() {
@@ -79,6 +88,81 @@ if ! "$PYTHON_BIN" -c "import torch, transformers, datasets, sentence_transforme
   exit 1
 fi
 
+if [[ -z "${EXPERIMENT_PRESET+x}" ]]; then
+  if [[ -z "${BENCHMARK_SUITE+x}" && -z "${BENCHMARK_PROFILE+x}" && -z "${CONFIG_PATH+x}" && -z "${MODE_SUITE+x}" && -z "${MODE+x}" && -z "${RUN_NAME+x}" && -z "${RUN_NAME_PREFIX+x}" ]]; then
+    EXPERIMENT_PRESET="verification_core"
+  else
+    EXPERIMENT_PRESET="custom"
+  fi
+fi
+
+if [[ -z "${_GAPVERIFY_SUITE_CHILD:-}" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; then
+  case "$EXPERIMENT_PRESET" in
+    verification_core)
+      : "${BENCHMARK_SUITE:=fever,hover,feverous,averitec}"
+      : "${MODE_SUITE:=standard_rag,gap_current}"
+      : "${RUN_NAME_PREFIX:=run_verification_core}"
+      : "${PREP_BENCHMARK_DATA:=true}"
+      : "${RUN_BUILD_INDEX:=true}"
+      : "${RUN_EVAL_STATELESS:=true}"
+      : "${RUN_EVAL_CONTINUAL:=false}"
+      : "${RUN_ABLATION:=false}"
+      : "${FEVER_PREP_LIMIT:=500}"
+      : "${HOVER_PREP_LIMIT:=500}"
+      : "${FEVEROUS_PREP_LIMIT:=500}"
+      : "${AVERITEC_PREP_LIMIT:=500}"
+      ;;
+    transfer_boundary)
+      : "${BENCHMARK_SUITE:=nq,hotpotqa}"
+      : "${MODE_SUITE:=standard_rag,gap_current}"
+      : "${RUN_NAME_PREFIX:=run_transfer_boundary}"
+      : "${PREP_BENCHMARK_DATA:=true}"
+      : "${RUN_BUILD_INDEX:=true}"
+      : "${RUN_EVAL_STATELESS:=true}"
+      : "${RUN_EVAL_CONTINUAL:=false}"
+      : "${RUN_ABLATION:=false}"
+      : "${NQ_PREP_LIMIT:=500}"
+      : "${HOTPOTQA_PREP_LIMIT:=500}"
+      ;;
+    memory_diagnostic)
+      : "${BENCHMARK_PROFILE:=continual_qa}"
+      : "${MODE_SUITE:=standard_rag,gap_current,gap_memory_keyed,gap_memory_ema}"
+      : "${RUN_NAME:=run_memory_diagnostic}"
+      : "${PREP_BENCHMARK_DATA:=true}"
+      : "${RUN_BUILD_INDEX:=true}"
+      : "${RUN_EVAL_STATELESS:=true}"
+      : "${RUN_EVAL_CONTINUAL:=true}"
+      : "${RUN_ABLATION:=false}"
+      : "${NQ_PREP_LIMIT:=500}"
+      : "${HOTPOTQA_PREP_LIMIT:=500}"
+      : "${FEVER_PREP_LIMIT:=500}"
+      ;;
+    fever_only)
+      : "${BENCHMARK_PROFILE:=fever}"
+      : "${MODE_SUITE:=standard_rag,gap_current}"
+      : "${RUN_NAME:=run_fever_verification}"
+      : "${PREP_BENCHMARK_DATA:=true}"
+      : "${RUN_BUILD_INDEX:=true}"
+      : "${RUN_EVAL_STATELESS:=true}"
+      : "${RUN_EVAL_CONTINUAL:=false}"
+      : "${RUN_ABLATION:=false}"
+      : "${FEVER_PREP_LIMIT:=500}"
+      ;;
+    custom)
+      ;;
+    *)
+      echo "Unknown EXPERIMENT_PRESET='$EXPERIMENT_PRESET'"
+      echo "Valid presets: verification_core, transfer_boundary, memory_diagnostic, fever_only, custom"
+      exit 1
+      ;;
+  esac
+fi
+
+export EXPERIMENT_PRESET BENCHMARK_SUITE BENCHMARK_PROFILE CONFIG_PATH MODE MODE_SUITE RUN_NAME RUN_NAME_PREFIX
+export PREP_BENCHMARK_DATA PREP_BENCHMARK RUN_BUILD_INDEX RUN_EVAL_STATELESS RUN_EVAL_CONTINUAL RUN_ABLATION
+export NQ_PREP_LIMIT HOTPOTQA_PREP_LIMIT FEVER_PREP_LIMIT HOVER_PREP_LIMIT FEVEROUS_PREP_LIMIT AVERITEC_PREP_LIMIT
+export NQ_PREP_SPLIT HOTPOTQA_PREP_SPLIT FEVER_PREP_SPLIT HOVER_PREP_SPLIT FEVEROUS_PREP_SPLIT AVERITEC_PREP_SPLIT
+
 BENCHMARK_SUITE="${BENCHMARK_SUITE:-}"
 RUN_NAME_PREFIX="${RUN_NAME_PREFIX:-run}"
 if [[ -n "$BENCHMARK_SUITE" && -z "${_GAPVERIFY_SUITE_CHILD:-}" ]]; then
@@ -89,6 +173,7 @@ if [[ -n "$BENCHMARK_SUITE" && -z "${_GAPVERIFY_SUITE_CHILD:-}" ]]; then
   fi
   echo "=========================================="
   echo "GapVerify suite mode (single Slurm allocation)"
+  echo "EXPERIMENT_PRESET=$EXPERIMENT_PRESET"
   echo "BENCHMARK_SUITE=$BENCHMARK_SUITE"
   echo "RUN_NAME_PREFIX=$RUN_NAME_PREFIX"
   echo "=========================================="
@@ -120,10 +205,13 @@ if [[ -z "$CONFIG_PATH" ]]; then
     nq) CONFIG_PATH="configs/nq.yaml" ;;
     hotpotqa) CONFIG_PATH="configs/hotpotqa.yaml" ;;
     fever) CONFIG_PATH="configs/fever.yaml" ;;
+    hover) CONFIG_PATH="configs/hover.yaml" ;;
+    feverous) CONFIG_PATH="configs/feverous.yaml" ;;
+    averitec) CONFIG_PATH="configs/averitec.yaml" ;;
     continual_qa) CONFIG_PATH="configs/continual_qa.yaml" ;;
     *)
       echo "Unknown BENCHMARK_PROFILE='$BENCHMARK_PROFILE'"
-      echo "Valid: demo, nq, hotpotqa, fever, continual_qa"
+      echo "Valid: demo, fever, hover, feverous, averitec, nq, hotpotqa, continual_qa"
       exit 1
       ;;
   esac
@@ -148,6 +236,7 @@ if [[ -n "$MODE_SUITE" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; then
   fi
   echo "=========================================="
   echo "GapVerify mode suite"
+  echo "EXPERIMENT_PRESET=$EXPERIMENT_PRESET"
   echo "BENCHMARK_PROFILE=$BENCHMARK_PROFILE"
   echo "MODE_SUITE=$MODE_SUITE"
   echo "=========================================="
@@ -183,9 +272,15 @@ PREP_BENCHMARK="${PREP_BENCHMARK:-$BENCHMARK_PROFILE}"
 NQ_PREP_LIMIT="${NQ_PREP_LIMIT:-500}"
 HOTPOTQA_PREP_LIMIT="${HOTPOTQA_PREP_LIMIT:-500}"
 FEVER_PREP_LIMIT="${FEVER_PREP_LIMIT:-500}"
+HOVER_PREP_LIMIT="${HOVER_PREP_LIMIT:-500}"
+FEVEROUS_PREP_LIMIT="${FEVEROUS_PREP_LIMIT:-500}"
+AVERITEC_PREP_LIMIT="${AVERITEC_PREP_LIMIT:-500}"
 NQ_PREP_SPLIT="${NQ_PREP_SPLIT:-validation}"
 HOTPOTQA_PREP_SPLIT="${HOTPOTQA_PREP_SPLIT:-validation}"
 FEVER_PREP_SPLIT="${FEVER_PREP_SPLIT:-validation}"
+HOVER_PREP_SPLIT="${HOVER_PREP_SPLIT:-validation}"
+FEVEROUS_PREP_SPLIT="${FEVEROUS_PREP_SPLIT:-validation}"
+AVERITEC_PREP_SPLIT="${AVERITEC_PREP_SPLIT:-dev}"
 
 RUN_BUILD_INDEX="${RUN_BUILD_INDEX:-}"
 if [[ -z "$RUN_BUILD_INDEX" ]]; then
@@ -278,6 +373,7 @@ should_run_continual() {
 
 echo "=========================================="
 echo "GapVerify batch run"
+echo "EXPERIMENT_PRESET=$EXPERIMENT_PRESET"
 echo "ROOT_DIR=$ROOT_DIR"
 echo "BENCHMARK_PROFILE=$BENCHMARK_PROFILE"
 echo "CONFIG_PATH=$CONFIG_PATH"
@@ -296,7 +392,7 @@ echo "=========================================="
 if should_prepare_data; then
   if [[ "$PREP_BENCHMARK" == "demo" ]]; then
     echo "PREP_BENCHMARK=demo is not valid for benchmark data generation."
-    echo "Set PREP_BENCHMARK to one of: nq, hotpotqa, fever, continual_qa, all"
+    echo "Set PREP_BENCHMARK to one of: fever, hover, feverous, averitec, nq, hotpotqa, continual_qa, all"
     exit 1
   fi
   echo "[RUN] prepare_benchmark_data benchmark=$PREP_BENCHMARK"
@@ -305,9 +401,15 @@ if should_prepare_data; then
     --nq-limit "$NQ_PREP_LIMIT" \
     --hotpotqa-limit "$HOTPOTQA_PREP_LIMIT" \
     --fever-limit "$FEVER_PREP_LIMIT" \
+    --hover-limit "$HOVER_PREP_LIMIT" \
+    --feverous-limit "$FEVEROUS_PREP_LIMIT" \
+    --averitec-limit "$AVERITEC_PREP_LIMIT" \
     --nq-split "$NQ_PREP_SPLIT" \
     --hotpotqa-split "$HOTPOTQA_PREP_SPLIT" \
-    --fever-split "$FEVER_PREP_SPLIT"
+    --fever-split "$FEVER_PREP_SPLIT" \
+    --hover-split "$HOVER_PREP_SPLIT" \
+    --feverous-split "$FEVEROUS_PREP_SPLIT" \
+    --averitec-split "$AVERITEC_PREP_SPLIT"
 fi
 
 if should_build_index; then

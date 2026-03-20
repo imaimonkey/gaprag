@@ -8,6 +8,12 @@ from typing import Iterable
 from .utils import safe_div
 
 _FEVER_LABELS = {"SUPPORTS", "REFUTES", "NOT ENOUGH INFO"}
+_AVERITEC_LABELS = {
+    "SUPPORTED",
+    "REFUTED",
+    "NOT ENOUGH EVIDENCE",
+    "CONFLICTING EVIDENCE/CHERRYPICKING",
+}
 
 _ANSWER_CUE_PATTERNS = [
     r"(?i)final answer\s*[:：]?\s*(.+)",
@@ -62,8 +68,22 @@ def _extract_classification_label(text: str) -> str | None:
     if not raw.strip():
         return None
     normalized = raw.upper()
+    if "CONFLICTING EVIDENCE/CHERRYPICKING" in normalized:
+        return "CONFLICTING EVIDENCE/CHERRYPICKING"
+    if "CONFLICTING EVIDENCE / CHERRYPICKING" in normalized:
+        return "CONFLICTING EVIDENCE/CHERRYPICKING"
+    if "CONFLICTING EVIDENCE" in normalized:
+        return "CONFLICTING EVIDENCE/CHERRYPICKING"
+    if "CHERRYPICKING" in normalized or "CHERRY PICKING" in normalized:
+        return "CONFLICTING EVIDENCE/CHERRYPICKING"
+    if "NOT ENOUGH EVIDENCE" in normalized:
+        return "NOT ENOUGH EVIDENCE"
     if "NOT ENOUGH INFO" in normalized:
         return "NOT ENOUGH INFO"
+    if "SUPPORTED" in normalized:
+        return "SUPPORTED"
+    if "REFUTED" in normalized:
+        return "REFUTED"
     if "REFUTES" in normalized:
         return "REFUTES"
     if "SUPPORTS" in normalized:
@@ -97,14 +117,39 @@ def canonicalize_prediction(prediction: str, answers: Iterable[str]) -> str:
             "unknown",
             "insufficient information",
             "not applicable",
+            "not enough evidence",
         }:
             return "NOT ENOUGH INFO"
+    if answer_set and answer_set.issubset(_AVERITEC_LABELS):
+        normalized = value.strip().lower()
+        if normalized in {"supports", "support", "supported", "yes", "true"}:
+            return "SUPPORTED"
+        if normalized in {"refutes", "refute", "refuted", "no", "false"}:
+            return "REFUTED"
+        if normalized in {
+            "not enough info",
+            "not enough evidence",
+            "nei",
+            "unknown",
+            "insufficient information",
+        }:
+            return "NOT ENOUGH EVIDENCE"
+        if normalized in {
+            "conflicting evidence/cherrypicking",
+            "conflicting evidence / cherrypicking",
+            "conflicting evidence",
+            "cherrypicking",
+            "cherry picking",
+        }:
+            return "CONFLICTING EVIDENCE/CHERRYPICKING"
     return value
 
 
 def is_label_classification_task(answers: Iterable[str]) -> bool:
     answer_set = {str(answer).strip().upper() for answer in answers if str(answer).strip()}
-    return bool(answer_set) and answer_set.issubset(_FEVER_LABELS)
+    return bool(answer_set) and (
+        answer_set.issubset(_FEVER_LABELS) or answer_set.issubset(_AVERITEC_LABELS)
+    )
 
 
 def extract_final_answer(prediction: str, strategy: str = "heuristic", max_chars: int = 80) -> str:

@@ -2,9 +2,6 @@
 
 ## Near-term
 
-- Add `AVeriTeC` benchmark adapter and config.
-- Add `HoVer` benchmark adapter and config.
-- Add `FEVEROUS` benchmark adapter and config.
 - Add verification-focused analysis plots:
   - label calibration
   - verdict confidence
