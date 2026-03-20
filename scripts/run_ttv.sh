@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=gapverify_top
+#SBATCH --job-name=gapverify_tt_v
 #SBATCH --output=/home/kimhj/GapVerify/logs/gapverify_top_%j.out
 #SBATCH --error=/home/kimhj/GapVerify/logs/gapverify_top_%j.err
 #SBATCH --gres=gpu:1
