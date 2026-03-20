@@ -1,0 +1,82 @@
+experiment:
+  seed: 42
+  output_dir: outputs/runs
+
+pipeline:
+  mode: gap_current
+
+corpus:
+  path: data/processed/fever_corpus.jsonl
+
+dataset:
+  path: data/processed/fever_qa.jsonl
+  limit: 0
+  field_map:
+    id: id
+    question: question
+    answers: answers
+    context: context
+    metadata: metadata
+    session_id: session_id
+
+retriever:
+  encoder_name: BAAI/bge-large-en-v1.5
+  device: null
+  normalize_embeddings: true
+  batch_size: 16
+  top_k: 10
+  index_path: data/indices/standard/fever.faiss
+  metadata_path: data/indices/standard/fever_metadata.jsonl
+  embedding_path: data/indices/standard/fever_embeddings.npy
+
+generator:
+  model_name: Qwen/Qwen2.5-3B-Instruct
+  device: null
+  torch_dtype: auto
+  max_new_tokens: 12
+  do_sample: false
+  temperature: 0.0
+  top_p: 1.0
+  use_chat_template: true
+  system_prompt: "You are a concise fact verification assistant. Reply with only one label in English."
+
+doc_encoder:
+  method: score_weighted_mean
+
+gap:
+  type: diff
+  target_dim: null
+  confidence_weight_source: retrieval
+  hidden_layer: -1
+  hidden_pooling: last_token
+  evidence_source: rag_hidden
+  normalize_inputs: true
+  normalize_gap: false
+  max_gap_norm: 0.9
+
+memory:
+  type: ema
+  ema_decay: 0.8
+  max_items: 256
+  temperature: 0.1
+  read_mode: blend_current
+  current_gap_weight: 0.5
+  cold_start: current_gap
+  update_min_retrieval_confidence: 0.0
+
+injection:
+  mode: prefix_bias
+  alpha: 0.08
+  prefix_length: 2
+
+prompt:
+  vanilla_template: "Claim: {question}\nClassify as SUPPORTS, REFUTES, or NOT ENOUGH INFO.\nRespond with one label only.\nAnswer:"
+  context_prefix: "Evidence:\n"
+  context_sep: "\n\n"
+  rag_template: "{context}\n\nClaim: {question}\nClassify as SUPPORTS, REFUTES, or NOT ENOUGH INFO.\nRespond with one label only.\nAnswer:"
+  injection_target: all_tokens
+  prefix_length: 2
+
+evaluation:
+  answer_parse_strategy: heuristic
+  answer_max_chars: 40

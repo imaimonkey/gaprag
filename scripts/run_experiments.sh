@@ -15,6 +15,10 @@ trap 'echo "[ERROR] line=${LINENO} cmd=${BASH_COMMAND}" >&2' ERR
 #   sbatch scripts/run_experiments.sh
 # runs EXPERIMENT_PRESET=verification_core.
 # Useful overrides:
+#   sbatch scripts/run_standard_verification.sh
+#   sbatch scripts/run_top_tier_verification.sh
+#   EXPERIMENT_PRESET=verification_core_standard sbatch scripts/run_experiments.sh
+#   EXPERIMENT_PRESET=verification_core_toptier sbatch scripts/run_experiments.sh
 #   EXPERIMENT_PRESET=transfer_boundary sbatch scripts/run_experiments.sh
 #   EXPERIMENT_PRESET=memory_diagnostic sbatch scripts/run_experiments.sh
 #   EXPERIMENT_PRESET=fever_only sbatch scripts/run_experiments.sh
@@ -102,6 +106,7 @@ if [[ -z "${_GAPVERIFY_SUITE_CHILD:-}" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; th
       : "${BENCHMARK_SUITE:=fever,hover,feverous,averitec}"
       : "${MODE_SUITE:=standard_rag,gap_current}"
       : "${RUN_NAME_PREFIX:=run_verification_core}"
+      : "${CONFIG_VARIANT:=default}"
       : "${PREP_BENCHMARK_DATA:=true}"
       : "${RUN_BUILD_INDEX:=true}"
       : "${RUN_EVAL_STATELESS:=true}"
@@ -112,10 +117,41 @@ if [[ -z "${_GAPVERIFY_SUITE_CHILD:-}" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; th
       : "${FEVEROUS_PREP_LIMIT:=500}"
       : "${AVERITEC_PREP_LIMIT:=500}"
       ;;
+    verification_core_standard)
+      : "${BENCHMARK_SUITE:=fever,hover,feverous,averitec}"
+      : "${MODE_SUITE:=standard_rag,gap_current}"
+      : "${RUN_NAME_PREFIX:=run_verification_standard}"
+      : "${CONFIG_VARIANT:=standard}"
+      : "${PREP_BENCHMARK_DATA:=true}"
+      : "${RUN_BUILD_INDEX:=true}"
+      : "${RUN_EVAL_STATELESS:=true}"
+      : "${RUN_EVAL_CONTINUAL:=false}"
+      : "${RUN_ABLATION:=false}"
+      : "${FEVER_PREP_LIMIT:=500}"
+      : "${HOVER_PREP_LIMIT:=500}"
+      : "${FEVEROUS_PREP_LIMIT:=500}"
+      : "${AVERITEC_PREP_LIMIT:=500}"
+      ;;
+    verification_core_toptier)
+      : "${BENCHMARK_SUITE:=fever,hover,feverous,averitec}"
+      : "${MODE_SUITE:=standard_rag,gap_current}"
+      : "${RUN_NAME_PREFIX:=run_verification_toptier}"
+      : "${CONFIG_VARIANT:=toptier}"
+      : "${PREP_BENCHMARK_DATA:=true}"
+      : "${RUN_BUILD_INDEX:=true}"
+      : "${RUN_EVAL_STATELESS:=true}"
+      : "${RUN_EVAL_CONTINUAL:=false}"
+      : "${RUN_ABLATION:=false}"
+      : "${FEVER_PREP_LIMIT:=0}"
+      : "${HOVER_PREP_LIMIT:=0}"
+      : "${FEVEROUS_PREP_LIMIT:=0}"
+      : "${AVERITEC_PREP_LIMIT:=0}"
+      ;;
     transfer_boundary)
       : "${BENCHMARK_SUITE:=nq,hotpotqa}"
       : "${MODE_SUITE:=standard_rag,gap_current}"
       : "${RUN_NAME_PREFIX:=run_transfer_boundary}"
+      : "${CONFIG_VARIANT:=default}"
       : "${PREP_BENCHMARK_DATA:=true}"
       : "${RUN_BUILD_INDEX:=true}"
       : "${RUN_EVAL_STATELESS:=true}"
@@ -128,6 +164,7 @@ if [[ -z "${_GAPVERIFY_SUITE_CHILD:-}" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; th
       : "${BENCHMARK_PROFILE:=continual_qa}"
       : "${MODE_SUITE:=standard_rag,gap_current,gap_memory_keyed,gap_memory_ema}"
       : "${RUN_NAME:=run_memory_diagnostic}"
+      : "${CONFIG_VARIANT:=default}"
       : "${PREP_BENCHMARK_DATA:=true}"
       : "${RUN_BUILD_INDEX:=true}"
       : "${RUN_EVAL_STATELESS:=true}"
@@ -141,6 +178,7 @@ if [[ -z "${_GAPVERIFY_SUITE_CHILD:-}" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; th
       : "${BENCHMARK_PROFILE:=fever}"
       : "${MODE_SUITE:=standard_rag,gap_current}"
       : "${RUN_NAME:=run_fever_verification}"
+      : "${CONFIG_VARIANT:=default}"
       : "${PREP_BENCHMARK_DATA:=true}"
       : "${RUN_BUILD_INDEX:=true}"
       : "${RUN_EVAL_STATELESS:=true}"
@@ -152,13 +190,14 @@ if [[ -z "${_GAPVERIFY_SUITE_CHILD:-}" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; th
       ;;
     *)
       echo "Unknown EXPERIMENT_PRESET='$EXPERIMENT_PRESET'"
-      echo "Valid presets: verification_core, transfer_boundary, memory_diagnostic, fever_only, custom"
+      echo "Valid presets: verification_core, verification_core_standard, verification_core_toptier, transfer_boundary, memory_diagnostic, fever_only, custom"
       exit 1
       ;;
   esac
 fi
 
 export EXPERIMENT_PRESET BENCHMARK_SUITE BENCHMARK_PROFILE CONFIG_PATH MODE MODE_SUITE RUN_NAME RUN_NAME_PREFIX
+export CONFIG_VARIANT
 export PREP_BENCHMARK_DATA PREP_BENCHMARK RUN_BUILD_INDEX RUN_EVAL_STATELESS RUN_EVAL_CONTINUAL RUN_ABLATION
 export NQ_PREP_LIMIT HOTPOTQA_PREP_LIMIT FEVER_PREP_LIMIT HOVER_PREP_LIMIT FEVEROUS_PREP_LIMIT AVERITEC_PREP_LIMIT
 export NQ_PREP_SPLIT HOTPOTQA_PREP_SPLIT FEVER_PREP_SPLIT HOVER_PREP_SPLIT FEVEROUS_PREP_SPLIT AVERITEC_PREP_SPLIT
@@ -200,21 +239,29 @@ fi
 BENCHMARK_PROFILE="${BENCHMARK_PROFILE:-demo}"
 CONFIG_PATH="${CONFIG_PATH:-}"
 if [[ -z "$CONFIG_PATH" ]]; then
+  CONFIG_VARIANT="${CONFIG_VARIANT:-default}"
+  config_dir="configs"
+  if [[ "$CONFIG_VARIANT" == "standard" ]]; then
+    config_dir="configs/standard"
+  fi
   case "$BENCHMARK_PROFILE" in
     demo) CONFIG_PATH="configs/base.yaml" ;;
-    nq) CONFIG_PATH="configs/nq.yaml" ;;
-    hotpotqa) CONFIG_PATH="configs/hotpotqa.yaml" ;;
-    fever) CONFIG_PATH="configs/fever.yaml" ;;
-    hover) CONFIG_PATH="configs/hover.yaml" ;;
-    feverous) CONFIG_PATH="configs/feverous.yaml" ;;
-    averitec) CONFIG_PATH="configs/averitec.yaml" ;;
-    continual_qa) CONFIG_PATH="configs/continual_qa.yaml" ;;
+    nq) CONFIG_PATH="$config_dir/nq.yaml" ;;
+    hotpotqa) CONFIG_PATH="$config_dir/hotpotqa.yaml" ;;
+    fever) CONFIG_PATH="$config_dir/fever.yaml" ;;
+    hover) CONFIG_PATH="$config_dir/hover.yaml" ;;
+    feverous) CONFIG_PATH="$config_dir/feverous.yaml" ;;
+    averitec) CONFIG_PATH="$config_dir/averitec.yaml" ;;
+    continual_qa) CONFIG_PATH="$config_dir/continual_qa.yaml" ;;
     *)
       echo "Unknown BENCHMARK_PROFILE='$BENCHMARK_PROFILE'"
       echo "Valid: demo, fever, hover, feverous, averitec, nq, hotpotqa, continual_qa"
       exit 1
       ;;
   esac
+  if [[ "$CONFIG_VARIANT" == "standard" && ! -f "$CONFIG_PATH" ]]; then
+    CONFIG_PATH="configs/${BENCHMARK_PROFILE}.yaml"
+  fi
 fi
 MODE="${MODE:-gap_memory_ema}"
 MODE_SUITE="${MODE_SUITE:-}"
