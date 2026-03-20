@@ -1,174 +1,187 @@
-# GapRAG Experiment Manual
+# GapVerify 실험 매뉴얼
 
-## 1. Environment Setup (uv)
+## 0. 현재 프로젝트를 어떻게 읽어야 하나
+
+이 저장소는 지금 시점에서 아래처럼 읽는 것이 맞습니다.
+
+- 메인 태스크: `retrieval-grounded verification`
+- 메인 방법: `gap_current`
+- 기준선: `standard_rag`
+- 보조/진단: `gap_memory_keyed`, `gap_memory_ema`
+
+즉 현재 실험은
+- `persistent memory가 continual gain을 준다`
+를 증명하는 단계가 아니라,
+- `latent discrepancy가 verification decision control signal로 유효한가`
+를 검증하는 단계입니다.
+
+현재 지원 벤치 역할:
+- `fever`: 메인 verification 벤치
+- `nq`, `hotpotqa`: 자유생성 QA에서의 transfer boundary 확인
+- `continual_qa`: persistent memory 진단용
+
+## 1. 환경 준비
 
 ```bash
-cd /home/kimhj/GapRAG
+cd /home/kimhj/GapVerify
 uv venv
-source .venv/bin/activate
-uv add numpy pandas pyyaml torch transformers accelerate datasets sentence-transformers faiss-cpu scikit-learn matplotlib seaborn tqdm
-uv add --dev pytest ruff
-uv lock
 uv sync --extra dev
 ```
 
-Notes:
-- `uv init` is already satisfied by existing `pyproject.toml`.
-- `uv.lock` is the source of reproducible dependency resolution.
+의존성 잠금은 이미 `uv.lock`에 반영되어 있습니다.
 
-## 2. Quick Validation (Smoke)
+## 2. 데이터 준비
 
-### 2.1 Build index
+### 2.1 현재 repo에서 바로 준비 가능한 벤치
 
 ```bash
-uv run python scripts/build_index.py --config configs/smoke_tiny.yaml
+uv run python scripts/prepare_benchmark_data.py --benchmark fever --fever-limit 500
+uv run python scripts/prepare_benchmark_data.py --benchmark nq --nq-limit 500
+uv run python scripts/prepare_benchmark_data.py --benchmark hotpotqa --hotpotqa-limit 500
+uv run python scripts/prepare_benchmark_data.py --benchmark continual_qa --nq-limit 500 --hotpotqa-limit 500 --fever-limit 500
 ```
 
-### 2.2 Single-pass eval
+### 2.2 현재 구현 범위와 다음 목표를 분리해서 보기
+
+현재 구현됨:
+- `FEVER`
+- `NQ`
+- `HotpotQA`
+- `continual_qa`
+
+다음 통합 우선순위:
+1. `AVeriTeC`
+2. `HoVer`
+3. `FEVEROUS`
+4. `SciFact` 또는 `Climate-FEVER`
+
+## 3. 실험 우선순위
+
+### 3.1 1순위: FEVER에서 verification 효과 확인
 
 ```bash
-uv run python scripts/run_eval.py --config configs/smoke_tiny.yaml --mode vanilla_lm --stateless --run-name smoke_vanilla
-uv run python scripts/run_eval.py --config configs/smoke_tiny.yaml --mode standard_rag --stateless --run-name smoke_rag
-uv run python scripts/run_eval.py --config configs/smoke_tiny.yaml --mode gap_current --stateless --run-name smoke_gap_current
-uv run python scripts/run_eval.py --config configs/smoke_tiny.yaml --mode gap_memory_ema --stateless --run-name smoke_gap_memory
-uv run python scripts/run_eval.py --config configs/smoke_tiny.yaml --mode gap_memory_keyed --stateless --run-name smoke_gap_keyed
-```
-
-### 2.3 Continual eval (stateless vs continual)
-
-```bash
-uv run python scripts/run_continual_eval.py --config configs/smoke_tiny.yaml --mode gap_memory_ema --run-name smoke_continual
-```
-
-### 2.4 Ablation
-
-```bash
-uv run python scripts/run_ablation.py --base-config configs/smoke_tiny.yaml --ablation-config configs/ablation_gap_defs.yaml --run-name smoke_ablation_gap
-uv run python scripts/run_ablation.py --base-config configs/smoke_tiny.yaml --ablation-config configs/ablation_memory.yaml --run-name smoke_ablation_memory
-uv run python scripts/run_ablation.py --base-config configs/smoke_tiny.yaml --ablation-config configs/ablation_injection.yaml --run-name smoke_ablation_injection
-```
-
-### 2.5 Analysis plot generation
-
-```bash
-uv run python scripts/analyze_results.py --runs-dir outputs/runs --out-dir outputs/figures
-```
-
-## 3. SLURM Batch Run
-
-Primary script: `scripts/run_experiments.sh`
-
-```bash
-sbatch scripts/run_experiments.sh
-```
-
-Current header is aligned to your existing environment:
-- `#SBATCH --nodelist=server2`
-- spool-safe repo root resolution via `SLURM_SUBMIT_DIR`
-- preflight package checks (`torch/transformers/datasets/sentence-transformers/faiss`)
-
-If your cluster changes, edit only these header lines in `scripts/run_experiments.sh`.
-
-### 3.1 Runtime toggles
-
-- `BENCHMARK_PROFILE` (default: `demo`)
-  - `demo`, `nq`, `hotpotqa`, `fever`, `continual_qa`
-- `CONFIG_PATH` (optional; if empty, selected automatically from `BENCHMARK_PROFILE`)
-- `MODE` (default: `gap_memory_ema`)
-- `MODE_SUITE` (optional comma-separated mode sweep)
-- `RUN_NAME` (optional)
-- `PREP_BENCHMARK_DATA` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
-- `PREP_BENCHMARK` (default: same as `BENCHMARK_PROFILE`)
-- `NQ_PREP_LIMIT`, `HOTPOTQA_PREP_LIMIT`, `FEVER_PREP_LIMIT` (default: `500`)
-- `NQ_PREP_SPLIT`, `HOTPOTQA_PREP_SPLIT`, `FEVER_PREP_SPLIT` (default: `validation`)
-- `RUN_BUILD_INDEX` (`auto/true/false`, default: `demo=auto`, `non-demo=true`)
-- `RUN_EVAL_STATELESS` (`true/false`)
-- `RUN_EVAL_CONTINUAL` (`auto/true/false`, default: `auto`)
-- `RUN_ABLATION` (`true/false`)
-- `ABLATION_CONFIG` (default: `configs/ablation_gap_defs.yaml`)
-
-Recommended benchmark roles:
-- `nq`, `hotpotqa`, `fever`: stateless benchmark first
-- `continual_qa`: continual-memory benchmark
-- with `RUN_EVAL_CONTINUAL=auto`, only `demo` and `continual_qa` run stateless-vs-continual by default
-
-### 3.2 Example
-
-```bash
-BENCHMARK_PROFILE=continual_qa \
-MODE=gap_memory_ema \
-RUN_NAME=exp_gap_memory \
+cd /home/kimhj/GapVerify
+BENCHMARK_PROFILE=fever \
+MODE_SUITE=standard_rag,gap_current \
+RUN_NAME=run_fever_verification \
 PREP_BENCHMARK_DATA=auto \
-NQ_PREP_LIMIT=800 \
-HOTPOTQA_PREP_LIMIT=800 \
-FEVER_PREP_LIMIT=800 \
 RUN_BUILD_INDEX=auto \
 RUN_EVAL_STATELESS=true \
-RUN_EVAL_CONTINUAL=true \
-RUN_ABLATION=false \
+RUN_EVAL_CONTINUAL=auto \
 sbatch scripts/run_experiments.sh
 ```
 
-### 3.2.b Recommended continual method sweep
+이 실험의 질문:
+- `gap_current`가 verification accuracy를 실제로 올리는가?
+
+반드시 확인할 파일:
+- `outputs/runs/run_fever_verification_standard_rag/metrics_summary.json`
+- `outputs/runs/run_fever_verification_gap_current/metrics_summary.json`
+
+### 3.2 2순위: 자유생성 QA에서 negative transfer 확인
 
 ```bash
+cd /home/kimhj/GapVerify
+BENCHMARK_SUITE=nq,hotpotqa \
+MODE_SUITE=standard_rag,gap_current \
+RUN_NAME_PREFIX=run_transfer_boundary \
+PREP_BENCHMARK_DATA=auto \
+RUN_BUILD_INDEX=auto \
+RUN_EVAL_CONTINUAL=auto \
+sbatch scripts/run_experiments.sh
+```
+
+이 실험의 질문:
+- verification에서 유효한 discrepancy injection이 free-form QA에도 전이되는가?
+
+해석 원칙:
+- 좋아지지 않아도 실패로만 읽지 말고,
+- `task boundary`를 보여주는 결과로 읽습니다.
+
+### 3.3 3순위: persistent memory는 진단용으로만 본다
+
+```bash
+cd /home/kimhj/GapVerify
 BENCHMARK_PROFILE=continual_qa \
 MODE_SUITE=standard_rag,gap_current,gap_memory_keyed,gap_memory_ema \
-RUN_NAME=exp_continual_suite \
+RUN_NAME=run_continual_suite \
 PREP_BENCHMARK_DATA=auto \
 RUN_BUILD_INDEX=auto \
 sbatch scripts/run_experiments.sh
 ```
 
-### 3.3 Benchmark profiles (recommended)
+이 실험의 질문:
+- memory가 실제로 output을 바꾸는가?
+- 바꾼다면 accuracy gain으로 이어지는가?
 
-```bash
-# 1) NQ
-BENCHMARK_PROFILE=nq PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
+핵심 확인 파일:
+- `compare_summary.json`
+- `predictions_stateless.jsonl`
+- `predictions_continual.jsonl`
 
-# 2) HotpotQA
-BENCHMARK_PROFILE=hotpotqa PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
+핵심 해석 지표:
+- `delta_exact_match`
+- `changed_raw_count`
+- `changed_prediction_count`
+- `improved_count`
+- `regressed_count`
 
-# 3) FEVER
-BENCHMARK_PROFILE=fever PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
+## 4. 로그와 결과를 어떻게 읽을 것인가
 
-# 4) Continual QA (NQ + HotpotQA + FEVER interleaved)
-BENCHMARK_PROFILE=continual_qa PREP_BENCHMARK_DATA=true RUN_BUILD_INDEX=auto sbatch scripts/run_experiments.sh
-```
+### 4.1 stateless benchmark
+- 파일: `metrics_summary.json`
+- 핵심 값:
+  - `exact_match`
+  - `f1`
+  - `retrieval_hit_at_k`
+  - `avg_prediction_confidence`
 
-## 4. Recommended Experiment Menu
+### 4.2 continual diagnostic
+- 파일: `compare_summary.json`
+- 핵심 값:
+  - `delta_exact_match`
+  - `delta_f1`
+  - `changed_raw_count`
+  - `improved_count`
+  - `regressed_count`
 
-### Menu A (Baseline sanity)
-- `vanilla_lm`
-- `standard_rag`
+### 4.3 중요한 해석 규칙
 
-### Menu B (Gap effect)
-- `gap_current`
-- `gap_memory_ema`
-- `gap_memory_keyed`
+- `changed_raw_count > 0`인데 `delta_exact_match <= 0`
+  - memory/injection은 행동적으로는 active하지만 품질 향상에는 실패한 것입니다.
 
-### Menu C (Ablations)
-- Gap definitions: `configs/ablation_gap_defs.yaml`
-- Memory rules: `configs/ablation_memory.yaml`
-- Injection rules: `configs/ablation_injection.yaml`
+- `retrieval_hit_at_k`는 같은데 `exact_match`만 변함
+  - retrieval이 아니라 generator-side control 효과입니다.
 
-### Menu D (Full report)
-1. Run Menu A/B
-2. Run Menu C
-3. Execute `analyze_results.py`
-4. Collect from:
-   - `outputs/runs/*/metrics_summary.json`
-   - `outputs/runs/*/compare_summary.json`
-   - `outputs/figures/*.png`
+- `FEVER`에서 좋아지고 `NQ/HotpotQA`에서 악화
+  - 이 방법은 answer synthesis보다 verification decision에 맞는다는 뜻입니다.
 
-## 5. Artifact Paths
+## 5. 지금 주장하면 안 되는 것
 
-- Per-run outputs: `outputs/runs/<RUN_NAME>/`
-- Analysis tables: `outputs/runs/analysis_compare_table.csv`, `outputs/runs/analysis_step_table.csv`
-- Figures: `outputs/figures/*.png`
+현재 상태에서 아래 주장은 금지하는 게 맞습니다.
 
-## 6. Troubleshooting
+- `persistent memory가 continual RAG를 robust하게 개선한다`
+- `gap_current가 범용 QA 개선 방법이다`
+- `현재 코드가 이미 최신 verification benchmark 전체를 커버한다`
 
-- HF warning about unauthenticated requests is non-fatal. For faster downloads set `HF_TOKEN`.
-- If model download is slow, run smoke config first (`configs/smoke_tiny.yaml`).
-- For reproducibility, keep `uv.lock` committed and run with `uv sync` before experiments.
+대신 아래처럼 말해야 합니다.
+
+- `latent discrepancy is promising as a control signal for verification-style tasks`
+- `the same signal does not currently transfer cleanly to free-form QA`
+- `persistent memory remains a negative or unresolved branch`
+
+## 6. 현재 실험 메뉴의 권장 순서
+
+1. `fever`: `standard_rag` vs `gap_current`
+2. `nq`, `hotpotqa`: `standard_rag` vs `gap_current`
+3. `continual_qa`: `standard_rag`, `gap_current`, `gap_memory_keyed`, `gap_memory_ema`
+4. 이후 `AVeriTeC`, `HoVer`, `FEVEROUS` 통합
+
+## 7. 다음 개발 우선순위
+
+1. `AVeriTeC` adapter 추가
+2. `HoVer` adapter 추가
+3. `FEVEROUS` adapter 추가
+4. verification 전용 calibration / confidence analysis 강화
+5. current-gap 전용 injector 정교화
+6. persistent memory는 appendix/negative-result 경로로 유지

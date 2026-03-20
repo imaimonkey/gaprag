@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from gaprag.gap_estimator import GapEstimator
+from gapverify.gap_estimator import GapEstimator
 
 
 def test_gap_estimator_preserves_raw_gap_norm_when_not_normalizing() -> None:

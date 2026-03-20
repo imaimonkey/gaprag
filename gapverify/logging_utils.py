@@ -14,7 +14,7 @@ def create_run_dir(base_dir: str | Path = "outputs/runs", run_name: str | None =
     return run_dir
 
 
-def setup_logger(log_path: str | Path | None = None, name: str = "gaprag") -> logging.Logger:
+def setup_logger(log_path: str | Path | None = None, name: str = "gapverify") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()

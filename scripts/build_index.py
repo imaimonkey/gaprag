@@ -10,13 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gaprag.datasets import load_corpus
-from gaprag.retriever import DenseRetriever
-from gaprag.utils import load_yaml
+from gapverify.datasets import load_corpus
+from gapverify.retriever import DenseRetriever
+from gapverify.utils import load_yaml
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build dense retrieval index for GapRAG")
+    parser = argparse.ArgumentParser(description="Build dense retrieval index for GapVerify")
     parser.add_argument("--config", default="configs/base.yaml")
     parser.add_argument("--corpus-path", default=None)
     parser.add_argument("--index-path", default=None)

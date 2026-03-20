@@ -35,7 +35,7 @@ class PipelineOutput:
     elapsed_sec: float
 
 
-class GapRAGPipeline:
+class GapVerifyPipeline:
     def __init__(
         self,
         generator: CausalLMGenerator,
@@ -124,7 +124,7 @@ class GapRAGPipeline:
         }
 
     @classmethod
-    def from_config(cls, config: dict[str, Any]) -> "GapRAGPipeline":
+    def from_config(cls, config: dict[str, Any]) -> "GapVerifyPipeline":
         gen_cfg = config.get("generator", {})
         ret_cfg = config.get("retriever", {})
         gap_cfg = config.get("gap", {})

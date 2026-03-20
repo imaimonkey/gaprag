@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gaprag.metrics import is_label_classification_task
+from gapverify.metrics import is_label_classification_task
 
 
 def test_is_label_classification_task_for_fever_labels() -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from gaprag.gap_injector import GapInjector
+from gapverify.gap_injector import GapInjector
 
 
 class _DummyEmbedding(torch.nn.Module):

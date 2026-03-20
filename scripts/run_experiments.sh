@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=gap_eval
-#SBATCH --output=/home/kimhj/GapRAG/logs/gaprag_%j.out
-#SBATCH --error=/home/kimhj/GapRAG/logs/gaprag_%j.err
+#SBATCH --job-name=gapverify_eval
+#SBATCH --output=/home/kimhj/GapVerify/logs/gapverify_%j.out
+#SBATCH --error=/home/kimhj/GapVerify/logs/gapverify_%j.err
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
@@ -18,7 +18,7 @@ find_repo_root() {
   local dir="$start_dir"
   local remaining=8
   while ((remaining > 0)); do
-    if [[ -f "$dir/pyproject.toml" && -d "$dir/gaprag" ]]; then
+    if [[ -f "$dir/pyproject.toml" && -d "$dir/gapverify" ]]; then
       echo "$dir"
       return 0
     fi
@@ -34,18 +34,12 @@ find_repo_root() {
 # NOTE: Slurm can execute from spool paths; prefer submit dir first.
 ROOT_CANDIDATE="${SLURM_SUBMIT_DIR:-$SCRIPT_DIR}"
 ROOT_DIR="$(find_repo_root "$ROOT_CANDIDATE")" || {
-  echo "Could not locate repo root from '$ROOT_CANDIDATE' (need pyproject.toml + gaprag/)."
+  echo "Could not locate repo root from '$ROOT_CANDIDATE' (need pyproject.toml + gapverify/)."
   exit 1
 }
 cd "$ROOT_DIR"
 
 mkdir -p logs outputs outputs/runs outputs/figures outputs/tables
-
-if [[ -f .venv/bin/activate ]]; then
-  source .venv/bin/activate
-else
-  echo "Warning: .venv/bin/activate not found, using system Python environment."
-fi
 
 # Hugging Face token auto-load (if not already exported)
 HF_TOKEN_FILE="${HF_TOKEN_FILE:-$HOME/.secrets/hf_token}"
@@ -64,9 +58,14 @@ export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-$HF_HOME/datasets}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HUB_CACHE}"
 export SENTENCE_TRANSFORMERS_HOME="${SENTENCE_TRANSFORMERS_HOME:-$HF_HOME/sentence_transformers}"
 
-PYTHON_BIN="$(command -v python || command -v python3 || true)"
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+else
+  PYTHON_BIN="$(command -v python || command -v python3 || true)"
+fi
+
 if [[ -z "$PYTHON_BIN" ]]; then
-  echo "python not found on PATH (after optional .venv activation)."
+  echo "python not found. Expected '$ROOT_DIR/.venv/bin/python' or a python on PATH."
   exit 1
 fi
 
@@ -75,20 +74,21 @@ if ! "$PYTHON_BIN" -c "import torch, transformers, datasets, sentence_transforme
   echo "Current python: $PYTHON_BIN"
   echo "Fix:"
   echo "  cd $ROOT_DIR"
+  echo "  uv venv"
   echo "  uv sync --extra dev"
   exit 1
 fi
 
 BENCHMARK_SUITE="${BENCHMARK_SUITE:-}"
 RUN_NAME_PREFIX="${RUN_NAME_PREFIX:-run}"
-if [[ -n "$BENCHMARK_SUITE" && -z "${_GAPRAG_SUITE_CHILD:-}" ]]; then
+if [[ -n "$BENCHMARK_SUITE" && -z "${_GAPVERIFY_SUITE_CHILD:-}" ]]; then
   IFS=',' read -r -a SUITE_PROFILES <<< "$BENCHMARK_SUITE"
   if [[ ${#SUITE_PROFILES[@]} -eq 0 ]]; then
     echo "BENCHMARK_SUITE is set but empty after parsing: '$BENCHMARK_SUITE'"
     exit 1
   fi
   echo "=========================================="
-  echo "GapRAG suite mode (single Slurm allocation)"
+  echo "GapVerify suite mode (single Slurm allocation)"
   echo "BENCHMARK_SUITE=$BENCHMARK_SUITE"
   echo "RUN_NAME_PREFIX=$RUN_NAME_PREFIX"
   echo "=========================================="
@@ -102,7 +102,7 @@ if [[ -n "$BENCHMARK_SUITE" && -z "${_GAPRAG_SUITE_CHILD:-}" ]]; then
     esac
     run_name="${RUN_NAME_PREFIX}_${run_suffix}"
     echo "[SUITE] >>> profile=$profile run_name=$run_name"
-    if ! env _GAPRAG_SUITE_CHILD=1 BENCHMARK_SUITE="" BENCHMARK_PROFILE="$profile" RUN_NAME="$run_name" bash "$0"; then
+    if ! env _GAPVERIFY_SUITE_CHILD=1 BENCHMARK_SUITE="" BENCHMARK_PROFILE="$profile" RUN_NAME="$run_name" bash "$0"; then
       echo "[SUITE] failed at profile=$profile"
       exit 1
     fi
@@ -140,14 +140,14 @@ mode_to_slug() {
   echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]\+/_/g;s/^_//;s/_$//'
 }
 
-if [[ -n "$MODE_SUITE" && -z "${_GAPRAG_MODE_CHILD:-}" ]]; then
+if [[ -n "$MODE_SUITE" && -z "${_GAPVERIFY_MODE_CHILD:-}" ]]; then
   IFS=',' read -r -a MODE_LIST <<< "$MODE_SUITE"
   if [[ ${#MODE_LIST[@]} -eq 0 ]]; then
     echo "MODE_SUITE is set but empty after parsing: '$MODE_SUITE'"
     exit 1
   fi
   echo "=========================================="
-  echo "GapRAG mode suite"
+  echo "GapVerify mode suite"
   echo "BENCHMARK_PROFILE=$BENCHMARK_PROFILE"
   echo "MODE_SUITE=$MODE_SUITE"
   echo "=========================================="
@@ -161,7 +161,7 @@ if [[ -n "$MODE_SUITE" && -z "${_GAPRAG_MODE_CHILD:-}" ]]; then
       child_run_name="run_${BENCHMARK_PROFILE}_${mode_slug}"
     fi
     echo "[MODE_SUITE] >>> mode=$run_mode run_name=$child_run_name"
-    if ! env _GAPRAG_MODE_CHILD=1 MODE_SUITE="" MODE="$run_mode" RUN_NAME="$child_run_name" bash "$0"; then
+    if ! env _GAPVERIFY_MODE_CHILD=1 MODE_SUITE="" MODE="$run_mode" RUN_NAME="$child_run_name" bash "$0"; then
       echo "[MODE_SUITE] failed at mode=$run_mode"
       exit 1
     fi
@@ -277,7 +277,7 @@ should_run_continual() {
 }
 
 echo "=========================================="
-echo "GapRAG batch run"
+echo "GapVerify batch run"
 echo "ROOT_DIR=$ROOT_DIR"
 echo "BENCHMARK_PROFILE=$BENCHMARK_PROFILE"
 echo "CONFIG_PATH=$CONFIG_PATH"

@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gaprag.logging_utils import create_run_dir
-from gaprag.utils import dump_yaml, load_yaml, save_json, set_by_dotted_path
+from gapverify.logging_utils import create_run_dir
+from gapverify.utils import dump_yaml, load_yaml, save_json, set_by_dotted_path
 
 
 def apply_overrides(config: dict, overrides: dict[str, object]) -> dict:
@@ -24,7 +24,7 @@ def apply_overrides(config: dict, overrides: dict[str, object]) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run GapRAG ablations")
+    parser = argparse.ArgumentParser(description="Run GapVerify ablations")
     parser.add_argument("--base-config", default="configs/base.yaml")
     parser.add_argument("--ablation-config", default="configs/ablation_gap_defs.yaml")
     parser.add_argument("--run-name", default=None)

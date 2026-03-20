@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gaprag"
+name = "gapverify"
 version = "0.1.0"
-description = "GapRAG: Persistent Latent Discrepancy Modeling for Training-Free Continual RAG"
+description = "GapVerify: Latent Discrepancy Control for Retrieval-Grounded Verification"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-  { name = "GapRAG Team" }
+  { name = "GapVerify Team" }
 ]
 dependencies = [
   "numpy>=1.24",
@@ -34,7 +34,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["gaprag"]
+packages = ["gapverify"]
 
 [tool.ruff]
 line-length = 100

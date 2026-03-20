@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gaprag.utils import ensure_dir
+from gapverify.utils import ensure_dir
 
 
 def _load_json(path: Path) -> dict:
@@ -24,7 +24,7 @@ def _load_json(path: Path) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Analyze GapRAG run outputs")
+    parser = argparse.ArgumentParser(description="Analyze GapVerify run outputs")
     parser.add_argument("--runs-dir", default="outputs/runs")
     parser.add_argument("--out-dir", default="outputs/figures")
     args = parser.parse_args()

@@ -10,7 +10,7 @@ from typing import Any
 
 from datasets import load_dataset
 
-from gaprag.utils import save_json, save_jsonl
+from gapverify.utils import save_json, save_jsonl
 
 
 def _slug(text: str, max_len: int = 48) -> str:
@@ -317,7 +317,7 @@ def _write_split(split: PreparedSplit, out_dir: Path) -> tuple[Path, Path]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare benchmark data files for GapRAG")
+    parser = argparse.ArgumentParser(description="Prepare benchmark data files for GapVerify")
     parser.add_argument(
         "--benchmark",
         required=True,

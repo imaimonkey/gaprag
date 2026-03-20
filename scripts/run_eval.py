@@ -14,9 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from gaprag.datasets import load_qa_dataset
-from gaprag.logging_utils import create_run_dir, setup_logger, snapshot_config
-from gaprag.metrics import (
+from gapverify.datasets import load_qa_dataset
+from gapverify.logging_utils import create_run_dir, setup_logger, snapshot_config
+from gapverify.metrics import (
     canonicalize_prediction,
     exact_match,
     extract_final_answer,
@@ -26,12 +26,12 @@ from gaprag.metrics import (
     summarize_scores,
     token_f1,
 )
-from gaprag.pipeline import GapRAGPipeline
-from gaprag.utils import load_yaml, save_json, save_jsonl, set_seed
+from gapverify.pipeline import GapVerifyPipeline
+from gapverify.utils import load_yaml, save_json, save_jsonl, set_seed
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run GapRAG single-pass evaluation")
+    parser = argparse.ArgumentParser(description="Run GapVerify single-pass evaluation")
     parser.add_argument("--config", default="configs/base.yaml")
     parser.add_argument("--mode", default=None)
     parser.add_argument("--run-name", default=None)
@@ -56,7 +56,7 @@ def main() -> None:
     dataset = load_qa_dataset(cfg)
     logger.info("loaded dataset size=%d", len(dataset))
 
-    pipeline = GapRAGPipeline.from_config(cfg)
+    pipeline = GapVerifyPipeline.from_config(cfg)
 
     rows = []
     for i, item in enumerate(tqdm(dataset, desc=f"eval/{mode}")):
