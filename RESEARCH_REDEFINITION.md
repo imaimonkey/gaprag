@@ -1,93 +1,76 @@
-# GapVerify Research Redefinition
+# GapVerify Research Scope
 
-## 1. 왜 재정의가 필요한가
+## 1. 연구 정의
 
-초기 프로젝트 정의는 다음을 전제로 했습니다.
-- persistent latent discrepancy memory
-- training-free continual RAG
-- future query improvement through memory accumulation
+GapVerify는 **retrieval-grounded verification에서 latent discrepancy를 training-free control signal로 사용하는 방법**을 연구합니다.
 
-하지만 현재 구현과 결과는 이 강한 서사를 지지하지 않습니다.
+핵심 객체는 세 가지입니다.
+- retrieved evidence
+- model-internal belief state
+- explicit latent discrepancy between them
 
-실제 결과 요약:
-- `gap_current`는 `FEVER`에서 긍정 신호를 보임
-- `gap_current`는 `NQ`, `HotpotQA`에서 악화
-- `gap_memory_keyed`, `gap_memory_ema`는 `continual_qa`에서 gain을 재현하지 못함
+이 프로젝트의 기본 가정은 다음과 같습니다.
+- evidence를 본 모델 상태와 query/claim 중심 상태 사이에는 의미 있는 discrepancy가 존재할 수 있다.
+- 이 discrepancy는 inference-time에서 직접 활용 가능한 control signal일 수 있다.
+- 이 신호의 효과는 태스크와 evidence 구조에 따라 달라질 수 있다.
 
-따라서 메인 연구 질문을 바꿔야 합니다.
+## 2. 핵심 연구 물음
 
-## 2. 새로운 연구 정의
+1. retrieved evidence와 모델 내부 state 사이의 latent discrepancy를 안정적으로 추출할 수 있는가?
+2. 이 discrepancy를 주입하면 verification verdict 형성에 도움이 되는가?
+3. 이 효과는 어떤 benchmark family에서 가장 잘 나타나는가?
+4. stronger retrieval/generation config로 갈수록 이 signal은 유지되는가?
 
-**GapVerify is a research project on latent discrepancy control for retrieval-grounded verification.**
-
-즉 핵심은:
-- `persistent memory`가 아니라 `latent discrepancy`
-- `continual QA`가 아니라 `verification`
-- `future-query improvement`가 아니라 `current-query control`
-
-## 3. 새로운 연구 물음
-
-1. retrieved evidence와 모델 내부 belief state 사이의 latent discrepancy를 안정적으로 추출할 수 있는가?
-2. 이 discrepancy를 training-free inference-time control signal로 사용하면 verification 정확도가 개선되는가?
-3. 왜 이 신호는 free-form QA보다 label-style verification에서 더 잘 작동하는가?
-
-## 4. 핵심 가설
+## 3. 핵심 가설
 
 ### 가설 A
-retrieved evidence는 support/refute/uncertain과 관련된 latent discrepancy를 유도한다.
+retrieved evidence는 support, refute, uncertainty와 관련된 latent discrepancy를 유도한다.
 
 ### 가설 B
-이 discrepancy는 긴 자연어 answer generation을 안정화하는 신호는 아니지만, evidence-grounded decision boundary를 움직이는 신호일 수 있다.
+이 discrepancy는 verdict formation을 조정하는 training-free signal로 사용할 수 있다.
 
 ### 가설 C
-따라서 discrepancy injection은 general QA enhancement보다 verification control 쪽에 더 적합하다.
+signal의 품질은 benchmark의 evidence 구조, retrieval difficulty, verdict space에 따라 달라진다.
 
-## 5. 메인 방법론
+## 4. 방법론 축
 
-### 중심 방법
+### 메인 비교
 - `standard_rag`
 - `gap_current`
 
-### 보조 진단
+### secondary branch
 - `gap_memory_keyed`
 - `gap_memory_ema`
 
-현재 단계에서 memory 계열은 핵심 기여가 아니라 negative-result/diagnostic branch로 취급한다.
+이 문서 기준에서 primary method는 `gap_current`입니다.
 
-## 6. 벤치마크 역할 재정의
+## 5. 벤치마크 구조
 
-### 메인 벤치
+### verification core
 - `FEVER`
-- `AVeriTeC`
 - `HoVer`
 - `FEVEROUS`
+- `AVeriTeC`
 
-### 경계 분석 벤치
+### transfer boundary
 - `NQ`
 - `HotpotQA`
 
-### 진단 벤치
+### memory diagnostic
 - `continual_qa`
+
+## 6. 현재 실험 프레임
+
+프로젝트의 기본 프레임은 다음과 같습니다.
+1. verification benchmark에서 baseline 대비 gain 측정
+2. stronger preset에서 robustness 확인
+3. QA benchmark에서 transfer boundary 확인
+4. memory branch에서 behavior diagnostic 확인
 
 ## 7. 주장 범위
 
-현재 허용되는 주장:
-- latent discrepancy can be used as a training-free control signal for verification-style tasks
-- the same signal does not cleanly transfer to free-form QA
+현재 이 프로젝트에서 직접 겨냥하는 주장은 다음입니다.
+- latent discrepancy can act as a training-free control signal for retrieval-grounded verification
+- the effect should be evaluated under multiple benchmark families and stronger config variants
 
-현재 허용되지 않는 주장:
-- persistent memory robustly improves continual RAG
-- gap injection is a general-purpose QA improvement method
-- current benchmark coverage is sufficient for a final verification paper
-
-## 8. 논문/보고서 서사
-
-추천되는 서사 구조:
-1. discrepancy extraction
-2. verification gain on FEVER-like tasks
-3. negative transfer on free-form QA
-4. memory branch as unresolved or negative finding
-
-## 9. 실용적 의미
-
-이 재정의는 프로젝트를 폐기하는 것이 아니라, 결과와 맞지 않는 강한 가설을 버리고 결과와 정합적인 질문으로 이동하는 것이다.
+즉 이 문서는 과거 경로 설명이 아니라, 현재 `GapVerify`가 어떤 연구 질문을 수행하는 코드베이스인지 정의하는 문서입니다.

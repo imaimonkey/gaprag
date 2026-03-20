@@ -1,30 +1,31 @@
 # GapVerify
 
-GapVerify는 **retrieval-grounded verification에서의 latent discrepancy control**을 연구하기 위한 모듈형 코드베이스입니다.
+GapVerify는 **retrieval-grounded verification을 위한 training-free latent discrepancy control** 연구 코드베이스입니다.
 
-이 코드베이스는 원래 continual RAG를 위한 persistent latent discrepancy memory를 탐색하는 방향에서 시작했습니다. 그러나 현재까지의 실험 결과를 종합하면, 더 좁고 방어 가능한 현재 위치는 다음과 같습니다.
-- `gap_current`가 현재의 핵심 방법입니다.
-- 주된 태스크 계열은 evidence-grounded **verification**입니다.
-- persistent memory(`gap_memory_ema`, `gap_memory_keyed`)는 현재 핵심 주장이라기보다 진단용/negative-result 분기입니다.
+이 저장소의 중심 질문은 단순합니다.
+- retrieved evidence와 모델의 내부 belief state 사이에서 의미 있는 latent discrepancy를 추출할 수 있는가?
+- 이 discrepancy를 inference-time control signal로 주입하면 verification 정확도를 높일 수 있는가?
+- 이 신호는 어떤 verification setting에서 잘 작동하고, 어디서 약해지는가?
 
-## 현재 연구 포지션
+## 프로젝트 포지션
 
-이 저장소에서 현재 경험적으로 지지되는 결론은 다음과 같습니다.
-- `FEVER`: latent discrepancy injection이 label-style verification에 도움이 될 수 있습니다.
-- `HoVer`, `FEVEROUS`, `AVeriTeC`: 현재 이 저장소에 verification 계열 벤치마크로 통합되어 있습니다.
-- `NQ`, `HotpotQA`: 동일한 injection이 free-form QA에는 **안정적으로 전이되지 않습니다**.
-- `continual_qa`: persistent memory는 현재 긍정적인 continual gain을 보여주지 못합니다.
+GapVerify는 다음 범위에 집중합니다.
+- 메인 태스크: `retrieval-grounded verification / fact checking`
+- 메인 방법: `gap_current`
+- 기준선: `standard_rag`
+- 확장/진단: `gap_memory_keyed`, `gap_memory_ema`
 
-따라서 이 저장소는 다음과 같이 읽는 것이 맞습니다.
-- **핵심 질문**: model-evidence latent discrepancy가 training-free control signal로 작동할 수 있는가?
-- **주요 태스크**: retrieval-grounded verification / fact checking
-- **부차 질문**: 이 신호는 어디에서 전이에 실패하는가?
+핵심 해석은 다음과 같습니다.
+- 이 저장소는 **verification decision control**을 연구합니다.
+- 핵심 기여 후보는 `current-gap discrepancy injection`입니다.
+- memory 계열은 현재 메인 방법이 아니라 보조 진단 축입니다.
 
 참고 문서:
-- [Research Redefinition](/home/kimhj/GapVerify/RESEARCH_REDEFINITION.md)
+- [Research Scope](/home/kimhj/GapVerify/RESEARCH_REDEFINITION.md)
 - [Benchmark Priority](/home/kimhj/GapVerify/BENCHMARK_PRIORITY.md)
 - [Restructure Plan](/home/kimhj/GapVerify/RESTRUCTURE_PLAN.md)
 - [Experiment Manual](/home/kimhj/GapVerify/EXPERIMENT_MANUAL.md)
+- [Related Work Benchmarks](/home/kimhj/GapVerify/RELATED_WORK_BENCHMARKS.md)
 
 ## 구현된 모드
 
@@ -34,41 +35,47 @@ GapVerify는 **retrieval-grounded verification에서의 latent discrepancy contr
 - `gap_memory_ema`
 - `gap_memory_keyed`
 
-해석:
-- `standard_rag`: baseline
-- `gap_current`: 현재의 주 실험 방법
-- `gap_memory_*`: 보조 진단용 방법
+권장 해석:
+- `standard_rag`: verification baseline
+- `gap_current`: 메인 실험 방법
+- `gap_memory_*`: secondary diagnostic branch
 
-## 이 저장소에서 현재 지원하는 벤치마크
+## 지원 벤치마크
 
-현재 구현됨:
+메인 verification 벤치:
 - `fever`
 - `hover`
 - `feverous`
 - `averitec`
+
+보조 분석 벤치:
 - `nq`
 - `hotpotqa`
+
+진단 벤치:
 - `continual_qa`
 
 권장 역할:
-- `fever`, `hover`, `feverous`, `averitec`: 메인 verification 벤치마크 계열
-- `nq`, `hotpotqa`: 레거시 transfer-boundary / negative-transfer 분석
-- `continual_qa`: 레거시 memory diagnostic 벤치마크
+- `fever`, `hover`, `feverous`, `averitec`: verification core result
+- `nq`, `hotpotqa`: transfer boundary 분석
+- `continual_qa`: memory behavior diagnostic
 
-다음 verification 벤치 후보:
-- optional: `SciFact`, `Climate-FEVER`
+다음 후보:
+- `SciFact`
+- `Climate-FEVER`
 
 ## 핵심 아이디어
 
-주어진 query/claim과 retrieved evidence에 대해, GapVerify는 다음 두 상태 사이의 latent discrepancy를 추정합니다.
-- 모델의 query-conditioned hidden state
+주어진 claim/query와 retrieved evidence에 대해, GapVerify는 다음 두 표현 사이의 discrepancy를 계산합니다.
+- query-conditioned hidden representation
 - evidence-aligned hidden representation
 
-이 discrepancy를 다시 추론 과정에 주입하여 training-free control signal로 사용합니다.
+이 discrepancy를 다시 추론 입력 쪽에 주입하여 verdict formation을 조정합니다.
 
-현재 근거를 갖고 주장할 수 있는 내용은 다음입니다.
-- 이 신호는 **verification-style label decision**에 도움이 될 수 있습니다.
-- 하지만 free-form QA generation을 안정적으로 개선하는 방법으로는 아직 보이지 않습니다.
+요약하면:
+- retrieval은 evidence를 가져오고
+- gap estimator는 latent discrepancy를 만들고
+- injector는 그 discrepancy를 training-free control signal로 사용합니다.
 
 ## 프로젝트 구조
 
@@ -76,6 +83,7 @@ GapVerify는 **retrieval-grounded verification에서의 latent discrepancy contr
 gapverify/
   README.md
   EXPERIMENT_MANUAL.md
+  RELATED_WORK_BENCHMARKS.md
   TODO.md
   RESEARCH_REDEFINITION.md
   BENCHMARK_PRIORITY.md
@@ -85,20 +93,18 @@ gapverify/
 
   configs/
     base.yaml
-    nq.yaml
-    hotpotqa.yaml
     fever.yaml
     hover.yaml
     feverous.yaml
     averitec.yaml
+    nq.yaml
+    hotpotqa.yaml
     continual_qa.yaml
-    rag.yaml
     gapverify_current.yaml
     gapverify_memory.yaml
-    ablation_gap_defs.yaml
-    ablation_memory.yaml
-    ablation_injection.yaml
     smoke_tiny.yaml
+    standard/
+    toptier/
 
   data/
     raw/
@@ -113,6 +119,8 @@ gapverify/
     run_ablation.py
     analyze_results.py
     run_experiments.sh
+    run_standard.sh
+    run_ttv.sh
 
   gapverify/
     retriever.py
@@ -155,14 +163,7 @@ uv sync
 
 ## 데이터 준비
 
-현재 로컬 benchmark adapter가 준비하는 대상:
-- `fever`
-- `hover`
-- `feverous`
-- `averitec`
-- `nq`
-- `hotpotqa`
-- `continual_qa`
+현재 로컬 adapter가 지원하는 데이터 준비 명령:
 
 ```bash
 uv run python scripts/prepare_benchmark_data.py --benchmark fever --fever-limit 500
@@ -187,25 +188,24 @@ uv run python scripts/prepare_benchmark_data.py --benchmark continual_qa --nq-li
 }
 ```
 
-## Retrieval Index 구축
+## 인덱스 구축
 
 ```bash
-uv run python scripts/build_index.py --config configs/base.yaml
+uv run python scripts/build_index.py --config configs/fever.yaml
 ```
 
-## 권장 실험 메뉴
+## 실행 방법
 
-### 0. 기본 1줄 실행
+### 기본 실행
 
-아무 옵션 없이 아래처럼 실행하면:
+아무 옵션 없이 아래처럼 실행하면 verification core preset이 동작합니다.
 
 ```bash
 cd /home/kimhj/GapVerify/scripts
 sbatch run_experiments.sh
 ```
 
-스크립트는 현재 기본적으로 다음 설정으로 동작합니다.
-- `EXPERIMENT_PRESET=verification_core`
+기본 preset:
 - `BENCHMARK_SUITE=fever,hover,feverous,averitec`
 - `MODE_SUITE=standard_rag,gap_current`
 - `PREP_BENCHMARK_DATA=true`
@@ -213,115 +213,63 @@ sbatch run_experiments.sh
 - `RUN_EVAL_STATELESS=true`
 - `RUN_EVAL_CONTINUAL=false`
 
-### 1. 메인 verification 실행
+### 표준형 verification 실행
 
-현재 이 저장소에서 권장하는 verification-core 실행:
-
-```bash
-BENCHMARK_SUITE=fever,hover,feverous,averitec \
-MODE_SUITE=standard_rag,gap_current \
-RUN_NAME_PREFIX=run_verification_core \
-PREP_BENCHMARK_DATA=auto \
-RUN_BUILD_INDEX=auto \
-RUN_EVAL_STATELESS=true \
-RUN_EVAL_CONTINUAL=false \
-sbatch scripts/run_experiments.sh
-```
-
-### 2. Transfer-boundary 실행
+현재 코드 범위에서 stronger local stack을 사용한 표준형 preset:
 
 ```bash
-BENCHMARK_SUITE=nq,hotpotqa \
-MODE_SUITE=standard_rag,gap_current \
-RUN_NAME_PREFIX=run_transfer_boundary \
-PREP_BENCHMARK_DATA=auto \
-RUN_BUILD_INDEX=auto \
-RUN_EVAL_CONTINUAL=auto \
-sbatch scripts/run_experiments.sh
+cd /home/kimhj/GapVerify/scripts
+sbatch run_standard.sh
 ```
 
-### 3. Memory diagnostic 실행
+### top-tier 지향 verification 실행
+
+현재 코드 범위에서 더 강한 config variant를 사용한 실험:
 
 ```bash
-BENCHMARK_PROFILE=continual_qa \
-MODE_SUITE=standard_rag,gap_current,gap_memory_keyed,gap_memory_ema \
-RUN_NAME=run_continual_suite \
-PREP_BENCHMARK_DATA=auto \
-RUN_BUILD_INDEX=auto \
-sbatch scripts/run_experiments.sh
+cd /home/kimhj/GapVerify/scripts
+sbatch run_ttv.sh
 ```
 
-해석:
-- `fever`, `hover`, `feverous`, `averitec`를 메인 verification 계열로 사용
-- `nq`, `hotpotqa`는 task-boundary failure case로만 사용
-- `continual_qa`는 persistent memory 주장을 과장하지 않기 위한 진단용으로만 사용
+주의:
+- `run_ttv.sh`는 현재 코드베이스 안에서 가능한 상향 세팅입니다.
+- field-standard full stack을 완전히 재현하는 것은 아닙니다.
 
-### Preset 단축 실행
+### 개별 프리셋 실행
 
 ```bash
-EXPERIMENT_PRESET=verification_core sbatch scripts/run_experiments.sh
-EXPERIMENT_PRESET=transfer_boundary sbatch scripts/run_experiments.sh
-EXPERIMENT_PRESET=memory_diagnostic sbatch scripts/run_experiments.sh
-EXPERIMENT_PRESET=fever_only sbatch scripts/run_experiments.sh
+EXPERIMENT_PRESET=verification_core sbatch run_experiments.sh
+EXPERIMENT_PRESET=verification_core_standard sbatch run_experiments.sh
+EXPERIMENT_PRESET=verification_core_toptier sbatch run_experiments.sh
+EXPERIMENT_PRESET=transfer_boundary sbatch run_experiments.sh
+EXPERIMENT_PRESET=memory_diagnostic sbatch run_experiments.sh
+EXPERIMENT_PRESET=fever_only sbatch run_experiments.sh
 ```
 
-`EXPERIMENT_PRESET=custom`은 `BENCHMARK_PROFILE`, `BENCHMARK_SUITE`, `MODE`, `MODE_SUITE`를 직접 전부 지정하고 싶을 때만 사용하면 됩니다.
+## 결과 읽기
 
-## Baseline / Method 개별 실행
+### stateless run
+- 파일: `metrics_summary.json`
+- 핵심 값:
+  - `exact_match`
+  - `f1`
+  - `count`
 
-### Stateless
+### continual / memory diagnostic
+- 파일: `compare_summary.json`
+- 핵심 값:
+  - `delta_exact_match`
+  - `delta_f1`
+  - `changed_raw_count`
+  - `changed_prediction_count`
+  - `improved_count`
+  - `regressed_count`
 
-```bash
-python scripts/run_eval.py --config configs/fever.yaml --mode standard_rag --stateless --run-name fever_rag
-python scripts/run_eval.py --config configs/fever.yaml --mode gap_current --stateless --run-name fever_gap_current
-```
+## 현재 문서화된 주장 범위
 
-### Continual diagnostic
+이 저장소는 다음 질문을 검증하기 위한 연구용 코드입니다.
+- latent discrepancy가 verification에서 유효한 control signal인가?
+- 그 효과는 benchmark에 따라 얼마나 안정적인가?
+- stronger baseline과 config variant로 가면 신호가 유지되는가?
 
-```bash
-python scripts/run_continual_eval.py --config configs/continual_qa.yaml --mode gap_memory_ema --run-name continual_gap_memory_ema
-```
-
-## 결과 분석
-
-```bash
-python scripts/analyze_results.py --runs-dir outputs/runs --out-dir outputs/figures
-```
-
-현재 권장 해석 방식:
-- `compare_summary.json`: continual diagnostic 비교에 사용
-- `metrics_summary.json`: stateless benchmark 비교에 사용
-- `changed_raw_count`, `changed_prediction_count`: "출력이 바뀌었는가"와 "정확도가 좋아졌는가"를 분리해서 볼 때 사용
-
-## Slurm 배치 실행
-
-주 실행 스크립트:
-
-```bash
-sbatch scripts/run_experiments.sh
-```
-
-주요 환경변수 옵션:
-- `BENCHMARK_PROFILE` (`demo|nq|hotpotqa|fever|continual_qa`)
-- `BENCHMARK_SUITE` (콤마 구분 profile sweep)
-- `MODE` (단일 모드)
-- `MODE_SUITE` (콤마 구분 mode sweep)
-- `RUN_NAME`, `RUN_NAME_PREFIX`
-- `PREP_BENCHMARK_DATA`
-- `RUN_BUILD_INDEX`
-- `RUN_EVAL_STATELESS`
-- `RUN_EVAL_CONTINUAL`
-- `RUN_ABLATION`
-
-`RUN_EVAL_CONTINUAL=auto`의 의미:
-- `demo`와 `continual_qa`에서만 continual 비교를 수행
-- continual test로 의미 없는 벤치에서 과장된 해석을 막기 위한 장치
-
-## 이 저장소가 현재 주장하지 않는 것
-
-이 코드베이스는 현재 아래의 강한 주장들을 **지지하지 않습니다**.
-- persistent memory가 미래 query를 robust한 continual setting에서 개선한다
-- discrepancy injection이 범용적인 QA 개선 기법이다
-- 현재 벤치 지원만으로 최신 fact-checking suite 전반을 모두 커버한다
-
-이들은 현재 확립된 결론이 아니라, 앞으로 더 검증해야 할 열린 질문 또는 후속 과제입니다.
+즉 이 README는 현재 `GapVerify` 자체를 기준으로 작성되어 있으며, verification 중심 구조와 실험 축을 기본 전제로 둡니다.
